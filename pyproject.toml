@@ -6,12 +6,17 @@ authors = ["Arslan <rslnkrmt2552@gmail.com>"]
 license = "MIT"
 
 [tool.poetry.dependencies]
-python = "^3.7"
+python = "^3.6"
 typer = "^0.1.1"
 numpy = "^1.18.2"
-tensorflow-gpu = "^2.1.0"
+cupy-cuda102 = "^7.3.0"
+numba = "^0.48.0"
 
 [tool.poetry.dev-dependencies]
+
+
+[tool.poetry.scripts]
+mlp = "mlpcode.cli:main"
 
 [build-system]
 requires = ["poetry>=0.12"]
