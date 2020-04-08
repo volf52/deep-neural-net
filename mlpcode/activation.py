@@ -54,7 +54,7 @@ def unitstep(x):
     return xp.sign(x)
 
 
-def hard_tanh(x):
+def hard_tanh(dA, x):
     xp = cp.get_array_module(x)
     return xp.clip(x, -1, 1)
 
