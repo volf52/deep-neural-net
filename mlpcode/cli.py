@@ -1,22 +1,27 @@
 import typer
+from pathlib import Path
 
-app = typer.Typer(name = "MLP Cli tool")
+APP_NAME = "MLP CLI tool"
+
+app = typer.Typer(name=APP_NAME)
 
 
-@app.command(name = 'ls')
+@app.command(name="ls")
 def ls():
+    configPath = Path(__file__).absolute()
+    typer.echo(configPath)
+
+
+@app.command(name="hello")
+def hello():
     typer.echo("Hello")
-
-
-# @app.command(name = 'test')
-# def test():
-    # typer.echo(tf.config.list_physical_devices("GPU"))
 
 
 def main():
     app()
 
+
 if __name__ == "__main__":
-    # app()
-    # print(tf.config.list_physical_devices("GPU"))
-    print('hello')
+    from pathlib import Path
+
+    app()
