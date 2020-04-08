@@ -12,6 +12,7 @@ class NeuralNet:
         self,
         numNeurons: List[int],
         outClasses: int,
+        useGpu=True,
         hidden_activation: af = af.relu,
         output_activation=None,
     ):
@@ -21,6 +22,12 @@ class NeuralNet:
 
         self._memory = {}
         self.numNeurons = numNeurons
+
+        if useGpu:
+            self.xp = cp
+        else:
+            self.xp = np
+
         if output_activation is None:
             if outClasses == 2:
                 self.outAf = af.sigmoid
@@ -71,17 +78,53 @@ class NeuralNet:
             layerOut = layer["out_dim"]
 
             params["W" + str(layerIdx)] = (
-                cp.random.randn(layerOut, layerInp) * 0.1
+                self.xp.random.randn(layerOut, layerInp) * 0.1
             )
-            params["b" + str(layerIdx)] = cp.random.randn(layerOut, 1) * 0.1
+            params["b" + str(layerIdx)] = (
+                self.xp.random.randn(layerOut, 1) * 0.1
+            )
 
         return params
+
+    def singleLayerForward(
+        self, A_prev, W_curr, b_curr, activation_func: af = af.relu
+    ):
+        Z_curr = self.xp.dot(W_curr, A_prev) + b_curr
+
+        afunc = ACTIVATION_FUNCTIONS.get(activation_func)
+        if afunc is None:
+            raise ValueError(f"Non-supported function: {activation_func}")
+
+        return afunc(Z_curr), Z_curr
+
+    def forwardProp(self, Xi):
+        self._memory = {}
+        A_curr = Xi
+
+        for i, layer in enumerate(self.arch):
+            layerIdx = i + 1
+            A_prev = A_curr
+
+            afunc = layer["activation"]
+            W_curr = self.params["W" + str(layerIdx)]
+            b_curr = self.params["b" + str(layerIdx)]
+            A_curr, Z_curr = self.singleLayerForward(
+                A_prev, W_curr, b_curr, afunc
+            )
+
+            self._memory["A" + str(i)] = A_prev
+            self._memory["Z" + str(layerIdx)] = Z_curr
+
+        return A_curr
 
 
 if __name__ == "__main__":
     from pprint import pprint
 
-    nLayers = [2, 4, 6, 6, 4]
+    nLayers = [3, 4, 6, 6, 4]
     out = 2
+    abc = cp.array([[2.4, 5.7, 3.6], [7.8, 8.9, 7.9]])
     nn = NeuralNet(nLayers, out)
     pprint(nn.params)
+    ac = nn.forwardProp(abc[1])
+    print(ac)
