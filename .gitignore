@@ -4,3 +4,4 @@ __pycache__
 *.pyd
 .mypy_cache
 mlpcode.egg-info
+*-ubyte
