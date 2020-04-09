@@ -13,7 +13,9 @@ def read_idx(filename, xp, custom_shape=None):
         shape = tuple(struct.unpack(">I", f.read(4))[0] for d in range(dims))
         if shape is not None:
             shape = custom_shape
-        return xp.fromfile(f, dtype=np.uint8).reshape(shape)
+
+        # Added division by 255.0 to normalize the data
+        return xp.fromfile(f, dtype=np.uint8).reshape(shape) / 255.0
 
 
 def read_tenk(useGpu=True, reshape=False):
