@@ -14,7 +14,7 @@ def cross_entropy_loss(Y_hat, Y):
     Y_hat[xp.isclose(Y_hat, 0.0000001)] += 2.2251e-308
 
     cost = (
-        -1
+        -1.0
         / m
         * (xp.dot(Y, xp.log(Y_hat).T) + xp.dot(1 - Y, xp.log(1 - Y_hat).T))
     )

@@ -18,7 +18,7 @@ def read_idx(filename, xp, custom_shape=None):
         return xp.fromfile(f, dtype=np.uint8).reshape(shape) / 255.0
 
 
-def read_tenk(useGpu=True, reshape=False):
+def read_test(useGpu=True, reshape=False):
     tenkPath = DATA_DIR / "t10k-images.idx3-ubyte"
     tenkLabels = DATA_DIR / "t10k-labels.idx1-ubyte"
     xShape = None
@@ -69,7 +69,7 @@ def read_train(useGpu=True, reshape=False):
 
 
 if __name__ == "__main__":
-    tenk, tlabels = read_tenk(reshape=True)
+    tenk, tlabels = read_test(reshape=True)
     print(tenk.shape)
     print(tlabels.shape)
     train, trLabels = read_train(reshape=True)
