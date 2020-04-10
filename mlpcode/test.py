@@ -16,4 +16,4 @@ print("Creating neural net")
 nn = Network(
     layers, useGpu=useGpu, hiddenAf=af.relu, outAf=af.sigmoid, lossF=lf.mse,
 )
-nn.train(X_train, y_train, epochs, 600, 1e-2, X_test, y_test)
+nn.train(X_train, y_train, epochs, 600, 3.0, X_test, y_test)

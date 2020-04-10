@@ -81,15 +81,15 @@ class Network(object):
             ]
             for mini_batch in mini_batches:
                 miniBatchCost = self.update_mini_batch(mini_batch, eta)
-                # epochCost.append(miniBatchCost)
+                epochCost.append(miniBatchCost)
             if testX is not None:
                 correct = self.get_accuracy(testX, testY)
                 acc = correct * 100.0 / n_test
-                # cost = self.xp.array(epochCost).mean()
-                cost = "not calculating for now"
+                cost = self.xp.array(epochCost).mean()
+                # cost = "not calculating for now"
                 print(
-                    "Epoch {0}: {1} / {2} ({3}%)\tLoss: {4}".format(
-                        j, correct, n_test, acc, cost
+                    "Epoch {0}: {1} / {2} ({3}%)\tLoss: {4:.02f}".format(
+                        j, correct, n_test, acc, float(cost)
                     )
                 )
             else:
@@ -124,7 +124,7 @@ class Network(object):
             activations.append(activation)
 
         # Mean cost of whole batch
-        # cost = self.loss(activation, y).mean()
+        cost = self.loss(activation, y).mean()
         # backward pass
         dLdA = self.loss_derivative(activation, y)  # expected shape: k * m
         cp.cuda.Stream.null.synchronize()
@@ -143,8 +143,8 @@ class Network(object):
             nabla_b[-l] = delta
             nabla_w[-l] = self.xp.dot(delta, activations[-l - 1].T)
             cp.cuda.Stream.null.synchronize()
-        # return (nabla_b, nabla_w, cost)
-        return (nabla_b, nabla_w, None)
+        return (nabla_b, nabla_w, cost)
+        # return (nabla_b, nabla_w, None)
 
     def get_accuracy(self, testX, testY):
         y_hat = self.feedforward(testX)
