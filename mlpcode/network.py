@@ -124,8 +124,7 @@ class Network(object):
             activations.append(activation)
 
         # Mean cost of whole batch
-        y_hat = activation.max(axis=0, keepdims=True)
-        cost = self.loss(y_hat, y).mean()
+        cost = self.loss(activation, y).mean()
         # backward pass
         dLdA = self.loss_derivative(activation, y)  # expected shape: k * m
         cp.cuda.Stream.null.synchronize()
