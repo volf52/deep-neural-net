@@ -6,7 +6,7 @@ from enum import Enum
 # Y_hat is model output, and Y is the real label/output
 # The expected dimensions are k * m, where k in no of neurons in the output, and m is the batchsize
 
-
+# Don't use cross entropy until I include a method to turn Y labels to one-hot-encoded vectors
 def cross_entropy_loss(Y_hat, Y):
     m = Y_hat.shape[1]
     xp = cp.get_array_module(Y_hat)
@@ -14,7 +14,7 @@ def cross_entropy_loss(Y_hat, Y):
     # Y_hat[xp.isclose(Y_hat, 0.0000001)] += 2.2251e-308
 
     cost = (-1.0 / m) * (
-        xp.log(Y_hat).T.dot(Y) + cp.log(1 - Y_hat).T.dot((1 - Y))
+        xp.log(Y_hat).T.dot(Y) + xp.log(1 - Y_hat).T.dot((1 - Y))
     )
     # No need to squeeze as the mean in backprop will take care of it
     return cost
