@@ -1,44 +1,19 @@
-import time
-from math import sqrt
+from mlpcode.activation import ACTIVATION_DERIVATIVES, ACTIVATION_FUNCTIONS
+from mlpcode.activation import ActivationFuncs as af
+from mlpcode.loss import LOSS_DERIVATES, LOSS_FUNCS
+from mlpcode.loss import LossFuncs as lf
+from mlpcode.network import Network
+from mlpcode.utils import read_test, read_train
 
-import cupy as cp
-import numpy as np
-from numba import vectorize
-
-npoints = int(1e7)
-
-x_cpu = np.arange(npoints, dtype=np.float32)
-x_gpu = cp.arange(npoints, dtype=cp.float32)
-cp.cuda.Stream.null.synchronize()
-
-
-@vectorize
-def cpu_sqrt(x):
-    return sqrt(x)
-
-
-@vectorize(["float32(float32)"], target="cuda")
-def gpu_sqrt(x):
-    return sqrt(x)
-
-
-s = time.time()
-cpu_sqrt(x_cpu)
-e = time.time()
-print(f"Time for cpu:\t\t{e - s}")
-
-
-s = time.time()
-np.sqrt(x_cpu)
-e = time.time()
-print(f"Time for numpy:\t\t{e - s}")
-
-s = time.time()
-gpu_sqrt(x_cpu)
-e = time.time()
-print(f"Time for numpy + numba:\t{e - s}")
-
-s = time.time()
-gpu_sqrt(x_gpu)
-e = time.time()
-print(f"Time for cupy + numba:\t{e - s}")
+useGpu = True
+print("Loading data")
+X_train, y_train = read_train(useGpu=useGpu)
+X_test, y_test = read_test(useGpu=useGpu)
+print("Finished loading mnist data")
+layers = [784, 64, 10]
+epochs = 500
+print("Creating neural net")
+nn = Network(
+    layers, useGpu=useGpu, hiddenAf=af.relu, outAf=af.sigmoid, lossF=lf.mse,
+)
+nn.train(X_train, y_train, epochs, 600, 3.0, X_test, y_test)

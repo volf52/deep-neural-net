@@ -1,19 +1,17 @@
 from enum import Enum
-from math import exp
 
 import cupy as cp
-import numpy as np
 
 
 def sigmoid(x):
     # xp allows a generic interface for cpu/gpu code
     xp = cp.get_array_module(x)
-    return 1 / (1 + xp.exp(-x))
+    return 1.0 / (1.0 + xp.exp(-x))
 
 
 def sigmoid_derivate(dA, x):
     z = sigmoid(x)
-    return dA * z * (1 - z)
+    return z * (1 - z)
 
 
 def tanh(x):
@@ -28,24 +26,25 @@ def tanh_derivative(dA, x):
 def softmax(x):
     xp = cp.get_array_module(x)
     # Subtracting the max to stabilise it (preventing ops with xp.Inf)
-    e_x = xp.exp(x - xp.max(x))
-    return e_x / xp.sum(e_x, axis=0)
+    e_x = xp.exp(x - x.max(axis=0, keepdims=True))
+    # Sum on axis 0 gives the number of classes
+    return e_x / e_x.sum(axis=0, keepdims=True)
 
 
 def softmax_derivative(dA, x):
     z = softmax(x)
-    return dA * z * (1 - z)
+    return z * (1 - z)
 
 
 def relu(x):
-    xp = cp.get_array_module(x)
-    return xp.maximum(0, x)
+    A = x.copy()
+    A[x <= 0] *= 0.01
+    return A
 
 
 def relu_derivative(dA, x):
-    xp = cp.get_array_module(x)
-    dZ = xp.array(dA, copy=True)
-    dZ[x <= 0] = 0
+    dZ = dA.copy()
+    dZ[x <= 0] = 0.01
     return dZ
 
 
@@ -55,8 +54,7 @@ def unitstep(x):
 
 
 def hard_tanh(dA, x):
-    xp = cp.get_array_module(x)
-    return xp.clip(x, -1, 1)
+    return x.clip(x, -1, 1)
 
 
 class ActivationFuncs(Enum):
@@ -88,24 +86,3 @@ ACTIVATION_DERIVATIVES = {
     ActivationFuncs.tanh: tanh_derivative,
     ActivationFuncs.sign: hard_tanh,
 }
-
-
-if __name__ == "__main__":
-    import time
-
-    size = int(1e7)
-    nptestArr = np.linspace(-size, size, dtype=np.float32)
-    cpTestArr = cp.linspace(-size, size, dtype=cp.float32)
-    cp.cuda.Stream.null.synchronize()
-
-    s = time.time()
-    a = hard_tanh(nptestArr)
-    e = time.time()
-    print(f"Time for numpy:\t\t{e - s}")
-
-    s = time.time()
-    b = hard_tanh(cpTestArr)
-    e = time.time()
-    print(f"Time for cupy:\t\t{e - s}")
-    print(np.max(a))
-    print(cp.max(b))
