@@ -82,15 +82,16 @@ class Network(object):
                 print("Epoch {0} complete".format(j))
 
     def update_mini_batch(self, mini_batch, eta):
-        nabla_b = [self.xp.zeros(b.shape) for b in self.biases]
-        nabla_w = [self.xp.zeros(w.shape) for w in self.weights]
         x, y = mini_batch
         m = x.shape[0] * 1.0
         delta_nabla_b, delta_nabla_w = self.backprop(x.T, y.T)
+        cp.cuda.Stream.null.synchronize()
         nabla_b = [nb.mean(axis=1, keepdims=True) for nb in delta_nabla_b]
         nabla_w = [(nw / m) for nw in delta_nabla_w]
+        cp.cuda.Stream.null.synchronize()
         self.weights = [w - (eta * nw) for w, nw in zip(self.weights, nabla_w)]
         self.biases = [b - (eta * nb) for b, nb in zip(self.biases, nabla_b)]
+        cp.cuda.Stream.null.synchronize()
 
     def backprop(self, x, y):
         nabla_b = [None for b in self.biases]
@@ -102,25 +103,34 @@ class Network(object):
         zs = []  # list to store all the z vectors, layer by layer
         for b, w, af in zip(self.biases, self.weights, self.activations):
             z = self.xp.dot(w, activation) + b
+            cp.cuda.Stream.null.synchronize()
             zs.append(z)
             activation = af(z)
             activations.append(activation)
 
         # backward pass
         outDeriv = self.outputDerivative
-        delta = self.cost_derivative(activations[-1], y) * outDeriv(zs[-1])
+        cost_deriv = self.cost_derivative(activations[-1], y)
+        cp.cuda.Stream.null.synchronize()
+        delta = cost_deriv * outDeriv(zs[-1])
         nabla_b[-1] = delta
         nabla_w[-1] = self.xp.dot(delta, activations[-2].T)
+        cp.cuda.Stream.null.synchronize()
+
         for l in range(2, self.num_layers):
             z = zs[-l]
             sp = self.hiddenDerivative(z)
+            cp.cuda.Stream.null.synchronize()
             delta = self.xp.dot(self.weights[-l + 1].T, delta) * sp
+            cp.cuda.Stream.null.synchronize()
             nabla_b[-l] = delta
             nabla_w[-l] = self.xp.dot(delta, activations[-l - 1].T)
+            cp.cuda.Stream.null.synchronize()
         return (nabla_b, nabla_w)
 
     def get_accuracy(self, testX, testY):
         y_hat = self.feedforward(testX)
+        cp.cuda.Stream.null.synchronize()
         pred = self.xp.argmax(y_hat, axis=0)
         return (testY == pred).sum()
 
@@ -128,20 +138,10 @@ class Network(object):
         return y_hat - y
 
 
-# def sigmoid(z):
-#     """The sigmoid function."""
-#     return 1.0 / (1.0 + np.exp(-z))
-
-
-# def sigmoid_prime(z):
-#     """Derivative of the sigmoid function."""
-#     return sigmoid(z) * (1 - sigmoid(z))
-
-
 if __name__ == "__main__":
     from mlpcode.utils import read_train, read_test
 
-    useGpu = True
+    useGpu = False
     X_train, y_train = read_train(reshape=True, useGpu=useGpu)
     X_test, y_test = read_test(reshape=True, useGpu=useGpu)
     layers = [784, 64, 10]
@@ -150,4 +150,4 @@ if __name__ == "__main__":
     m = 60000
 
     nn = Network(layers, useGpu=useGpu)
-    nn.train(X_train, y_train, epochs, 600, 1e-3, X_test, y_test)
+    nn.train(X_train, y_train, epochs, 600, 1e-2, X_test, y_test)
