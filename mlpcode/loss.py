@@ -4,31 +4,31 @@ from enum import Enum
 
 
 # Y_hat is model output, and Y is the real label/output
+# The expected dimensions are k * m, where k in no of neurons in the output, and m is the batchsize
 
 
 def cross_entropy_loss(Y_hat, Y):
     m = Y_hat.shape[1]
     xp = cp.get_array_module(Y_hat)
 
-    Y_hat[xp.isclose(Y_hat, 0.0000001)] += 2.2251e-308
+    # Y_hat[xp.isclose(Y_hat, 0.0000001)] += 2.2251e-308
 
-    cost = (
-        -1.0
-        / m
-        * (xp.dot(Y, xp.log(Y_hat).T) + xp.dot(1 - Y, xp.log(1 - Y_hat).T))
+    cost = (-1.0 / m) * (
+        xp.log(Y_hat).T.dot(Y) + cp.log(1 - Y_hat).T.dot((1 - Y))
     )
-    return xp.squeeze(cost)
+    # No need to squeeze as the mean in backprop will take care of it
+    return cost
 
 
-def check_zero_one(arr):
-    xp = cp.get_array_module(arr)
-    return xp.logical_or(xp.equal(arr, 0), xp.equal(arr, 1))
+# def check_zero_one(arr):
+#     xp = cp.get_array_module(arr)
+#     return xp.logical_or(xp.equal(arr, 0), xp.equal(arr, 1))
 
 
 def cross_entropy_derivative(Y_hat, Y):
     xp = cp.get_array_module(Y_hat)
 
-    Y_hat[check_zero_one(Y_hat)] += 0000000000.1
+    # Y_hat[check_zero_one(Y_hat)] += 0000000000.1
 
     return -(xp.divide(Y, Y_hat) - xp.divide(1 - Y, 1 - Y_hat))
 

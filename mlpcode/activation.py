@@ -26,8 +26,9 @@ def tanh_derivative(dA, x):
 def softmax(x):
     xp = cp.get_array_module(x)
     # Subtracting the max to stabilise it (preventing ops with xp.Inf)
-    e_x = xp.exp(x - xp.max(x))
-    return e_x / xp.sum(e_x, axis=0)
+    e_x = xp.exp(x - x.max(axis=0, keepdims=True))
+    # Sum on axis 0 gives the number of classes
+    return e_x / e_x.sum(axis=0, keepdims=True)
 
 
 def softmax_derivative(dA, x):
@@ -85,9 +86,3 @@ ACTIVATION_DERIVATIVES = {
     ActivationFuncs.tanh: tanh_derivative,
     ActivationFuncs.sign: hard_tanh,
 }
-
-
-if __name__ == "__main__":
-    import time
-
-    size = int(1e7)

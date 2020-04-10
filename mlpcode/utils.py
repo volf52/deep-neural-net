@@ -2,6 +2,7 @@ import struct
 from pathlib import Path
 
 import cupy as cp
+
 import numpy as np
 from mnist import MNIST
 
