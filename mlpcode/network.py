@@ -149,5 +149,5 @@ class Network(object):
     def get_accuracy(self, testX, testY):
         y_hat = self.feedforward(testX)
         cp.cuda.Stream.null.synchronize()
-        pred = y_hat.argmax(axis=0, keepdims=True)
+        pred = y_hat.argmax(axis=0).reshape(1, -1)
         return (testY == pred).sum()
