@@ -1,5 +1,4 @@
 import cupy as cp
-import numpy as np
 
 from enum import Enum
 
@@ -35,11 +34,12 @@ def cross_entropy_derivative(Y_hat, Y):
 
 
 def mse(Y_hat, Y):
-    return 0.5 * ((Y - Y_hat) ** 2)
+    # Error is summed across the output neurons
+    return 0.5 * ((Y - Y_hat) ** 2).sum(axis=0)
 
 
 def mse_derivative(Y_hat, Y):
-    return Y - Y_hat
+    return Y_hat - Y
 
 
 class LossFuncs(Enum):

@@ -1,8 +1,6 @@
 from enum import Enum
-from math import exp
 
 import cupy as cp
-import numpy as np
 
 
 def sigmoid(x):
@@ -11,7 +9,7 @@ def sigmoid(x):
     return 1.0 / (1.0 + xp.exp(-x))
 
 
-def sigmoid_derivate(x):
+def sigmoid_derivate(dA, x):
     z = sigmoid(x)
     return z * (1 - z)
 
@@ -21,7 +19,7 @@ def tanh(x):
     return xp.tanh(x)
 
 
-def tanh_derivative(x):
+def tanh_derivative(dA, x):
     return 1 - tanh(x) ** 2
 
 
@@ -32,21 +30,21 @@ def softmax(x):
     return e_x / xp.sum(e_x, axis=0)
 
 
-def softmax_derivative(x):
+def softmax_derivative(dA, x):
     z = softmax(x)
     return z * (1 - z)
 
 
 def relu(x):
-    xp = cp.get_array_module(x)
-    return xp.maximum(0, x)
+    A = x.copy()
+    A[x <= 0] *= 0.01
+    return A
 
 
-# def relu_derivative(x):
-#     xp = cp.get_array_module(x)
-#     dZ = xp.array(dA, copy=True)
-#     dZ[x <= 0] = 0
-#     return dZ
+def relu_derivative(dA, x):
+    dZ = dA.copy()
+    dZ[x <= 0] = 0.01
+    return dZ
 
 
 def unitstep(x):
@@ -54,15 +52,14 @@ def unitstep(x):
     return xp.sign(x)
 
 
-def hard_tanh(x):
-    xp = cp.get_array_module(x)
-    return xp.clip(x, -1, 1)
+def hard_tanh(dA, x):
+    return x.clip(x, -1, 1)
 
 
 class ActivationFuncs(Enum):
     sigmoid = "sigmoid"
     softmax = "softmax"
-    # relu = "relu"
+    relu = "relu"
     tanh = "tanh"
     sign = "unitstep"
 
@@ -76,13 +73,13 @@ class ActivationFuncs(Enum):
 ACTIVATION_FUNCTIONS = {
     ActivationFuncs.sigmoid: sigmoid,
     ActivationFuncs.softmax: softmax,
-    # ActivationFuncs.relu: relu,
+    ActivationFuncs.relu: relu,
     ActivationFuncs.tanh: tanh,
     ActivationFuncs.sign: unitstep,
 }
 
 ACTIVATION_DERIVATIVES = {
-    # ActivationFuncs.relu: relu_derivative,
+    ActivationFuncs.relu: relu_derivative,
     ActivationFuncs.sigmoid: sigmoid_derivate,
     ActivationFuncs.softmax: softmax_derivative,
     ActivationFuncs.tanh: tanh_derivative,
@@ -94,18 +91,3 @@ if __name__ == "__main__":
     import time
 
     size = int(1e7)
-    nptestArr = np.linspace(-size, size, dtype=np.float32)
-    cpTestArr = cp.linspace(-size, size, dtype=cp.float32)
-    cp.cuda.Stream.null.synchronize()
-
-    s = time.time()
-    a = hard_tanh(nptestArr)
-    e = time.time()
-    print(f"Time for numpy:\t\t{e - s}")
-
-    s = time.time()
-    b = hard_tanh(cpTestArr)
-    e = time.time()
-    print(f"Time for cupy:\t\t{e - s}")
-    print(np.max(a))
-    print(cp.max(b))
