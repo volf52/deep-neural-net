@@ -16,13 +16,16 @@ mnist_data = MNIST(DATA_DIR)
 
 def loadData(load_func, useGpu=True):
     if useGpu:
-        xp = cp.array
+        xp = cp
     else:
-        xp = np.array
+        xp = np
 
     data, labels = load_func()
 
-    return xp(data), xp(labels).reshape(-1, 1)
+    return (
+        xp.array(data, dtype=xp.float64),
+        xp.array(labels, dtype=xp.uint8).reshape(-1, 1),
+    )
 
 
 def read_test(useGpu=True):

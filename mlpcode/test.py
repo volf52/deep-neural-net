@@ -5,7 +5,7 @@ from mlpcode.loss import LossFuncs as lf
 from mlpcode.network import Network
 from mlpcode.utils import read_test, read_train
 
-useGpu = True
+useGpu = False
 print("Loading data")
 X_train, y_train = read_train(useGpu=useGpu)
 X_test, y_test = read_test(useGpu=useGpu)
@@ -14,6 +14,10 @@ layers = [784, 64, 10]
 epochs = 500
 print("Creating neural net")
 nn = Network(
-    layers, useGpu=useGpu, hiddenAf=af.relu, outAf=af.sigmoid, lossF=lf.mse,
+    layers,
+    useGpu=useGpu,
+    hiddenAf=af.relu,
+    outAf=af.softmax,
+    lossF=lf.cross_entropy,
 )
 nn.train(X_train, y_train, epochs, 600, 3.0, X_test, y_test)

@@ -124,7 +124,8 @@ class Network(object):
             activations.append(activation)
 
         # Mean cost of whole batch
-        cost = self.loss(activation, y).mean()
+        y_hat = activation.max(axis=0, keepdims=True)
+        cost = self.loss(y_hat, y).mean()
         # backward pass
         dLdA = self.loss_derivative(activation, y)  # expected shape: k * m
         cp.cuda.Stream.null.synchronize()
@@ -149,5 +150,5 @@ class Network(object):
     def get_accuracy(self, testX, testY):
         y_hat = self.feedforward(testX)
         cp.cuda.Stream.null.synchronize()
-        pred = y_hat.argmax(axis=0, keepdims=True)
+        pred = y_hat.argmax(axis=0).reshape(1, -1)
         return (testY == pred).sum()
