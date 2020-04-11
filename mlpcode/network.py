@@ -19,7 +19,15 @@ class Network(object):
         assert hiddenAf in ACTIVATION_FUNCTIONS
         assert outAf in ACTIVATION_FUNCTIONS
         assert lossF in LOSS_FUNCS
-        self.num_layers = len(sizes)
+        if lossF == lf.cross_entropy and outAf not in (af.sigmoid, af.softmax):
+            # My implementation for normal derivative of cross entropy is not stable enough
+            # Luckily, it comes down to (output - target) when used with sigmoid or softmax
+            raise ValueError(
+                "Gotta use sigmoid or softmax with cross entropy loss"
+            )
+
+        # Not counting input layer
+        self.num_layers = len(sizes) - 1
         if useGpu:
             self.xp = cp
         else:
@@ -36,6 +44,7 @@ class Network(object):
         self.loss_derivative = LOSS_DERIVATES[lossF]
         hiddenActivationFunc = ACTIVATION_FUNCTIONS[hiddenAf]
         self.hiddenDerivative = ACTIVATION_DERIVATIVES[hiddenAf]
+        self.outAF = outAf
         outputActivationFunc = ACTIVATION_FUNCTIONS[outAf]
         self.outputDerivative = ACTIVATION_DERIVATIVES[outAf]
         self.activations = [
@@ -100,7 +109,7 @@ class Network(object):
                 # cost = "not calculating for now"
                 print(
                     "Epoch {0}: {1} / {2} ({3}%)\tLoss: {4:.02f}".format(
-                        j, correct, n_test, acc, float(cost)
+                        j + 1, correct, n_test, acc, float(cost)
                     )
                 )
             else:
@@ -131,13 +140,16 @@ class Network(object):
         # backward pass
         dLdA = self.loss_derivative(activation, y)  # expected shape: k * m
         cp.cuda.Stream.null.synchronize()
-        dAdZ = self.outputDerivative(dLdA, zs[-1])
-        delta = dLdA * dAdZ
+        if self.outAF in (af.softmax, af.identity):
+            delta = dLdA
+        else:
+            dAdZ = self.outputDerivative(dLdA, zs[-1])
+            delta = dLdA * dAdZ
         nabla_b[-1] = delta
         nabla_w[-1] = self.xp.dot(delta, activations[-2].T)
         cp.cuda.Stream.null.synchronize()
 
-        for l in range(2, self.num_layers):
+        for l in range(2, self.num_layers + 1):
             z = zs[-l]
             dAprev = self.xp.dot(self.weights[-l + 1].T, delta)
             cp.cuda.Stream.null.synchronize()
