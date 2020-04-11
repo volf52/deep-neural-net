@@ -2,7 +2,6 @@ import struct
 from pathlib import Path
 
 import cupy as cp
-
 import numpy as np
 from mnist import MNIST
 
@@ -13,8 +12,15 @@ assert DATA_DIR.exists()
 
 mnist_data = MNIST(DATA_DIR)
 
+MNIST_CLASSES = 10
 
-def loadData(load_func, useGpu=True):
+
+def oneHotEncoding(classes: int, y):
+    xp = cp.get_array_module(y)
+    return xp.eye(classes)[y.astype("int32")]
+
+
+def loadData(load_func, useGpu=True, encoded=True, classes=MNIST_CLASSES):
     if useGpu:
         xp = cp
     else:
@@ -22,17 +28,20 @@ def loadData(load_func, useGpu=True):
 
     data, labels = load_func()
 
-    return (
-        xp.array(data, dtype=xp.float64) / 255.0,
-        xp.array(labels, dtype=xp.uint8).reshape(-1, 1),
-    )
+    X = xp.array(data, dtype=xp.float64) / 255.0
+    y = xp.array(labels, dtype=xp.uint8)
+
+    if encoded:
+        y = oneHotEncoding(classes, y)
+
+    return X, y
 
 
-def read_test(useGpu=True):
-    return loadData(mnist_data.load_testing, useGpu)
+def read_test(useGpu=True, encoded=True, classes=MNIST_CLASSES):
+    return loadData(mnist_data.load_testing, useGpu, encoded, classes)
 
 
-def read_train(useGpu=True):
+def read_train(useGpu=True, encoded=True, classes=MNIST_CLASSES):
     return loadData(mnist_data.load_training, useGpu)
 
 

@@ -5,16 +5,17 @@ from mlpcode.loss import LossFuncs as lf
 from mlpcode.network import Network
 from mlpcode.utils import read_test, read_train
 
-useGpu = False
+useGpu = True
 print("Loading data")
-X_train, y_train = read_train(useGpu=useGpu)
-X_test, y_test = read_test(useGpu=useGpu)
+trainX, trainY = read_train(useGpu=useGpu)
+# No need to one hot encod testY as we don't need it in that form
+testX, testY = read_test(useGpu=useGpu, encoded=False)
 print("Finished loading mnist data")
 layers = [784, 64, 10]
-epochs = 500
+epochs = 100
 print("Creating neural net")
 # Don't use cross entropy until I include a method to turn Y labels to one-hot-encoded vectors
 nn = Network(
     layers, useGpu=useGpu, hiddenAf=af.relu, outAf=af.sigmoid, lossF=lf.mse,
 )
-nn.train(X_train, y_train, epochs, 600, 3.0, X_test, y_test)
+nn.train(trainX, trainY, epochs, 600, 3.0, testX, testY)
