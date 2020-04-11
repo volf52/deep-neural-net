@@ -44,10 +44,17 @@ class Network(object):
         self.activations.append(outputActivationFunc)
         assert len(self.activations) == self.num_layers  # len(sizes)
 
-    def feedforward(self, a):
+    def feedforward(self, x):
+        a = x
+        activations = [x]  # list to store all the activations, layer by layer
+        zs = []  # list to store all the z vectors, layer by layer
         for b, w, af in zip(self.biases, self.weights, self.activations):
-            a = af(self.xp.dot(w, a) + b)
-        return a
+            z = self.xp.dot(w, a) + b
+            cp.cuda.Stream.null.synchronize()
+            zs.append(z)
+            a = af(z)
+            activations.append(a)
+        return zs, activations, a
 
     def train(
         self,
@@ -62,7 +69,10 @@ class Network(object):
         if testX is not None:
             n_test = len(testX)
             testX = testX.T
-            testY = testY.T
+            # No need to keep this in hot vector encoded form
+            if testY.shape[0] != testY.size:
+                testY = testY.argmax(axis=1).reshape(1, -1)
+            testY = testY.reshape(1, -1)
         n = len(trainX)
         print("Starting training")
         for j in range(epochs):
@@ -84,6 +94,7 @@ class Network(object):
                 epochCost.append(miniBatchCost)
             if testX is not None:
                 correct = self.get_accuracy(testX, testY)
+                cp.cuda.Stream.null.synchronize()
                 acc = correct * 100.0 / n_test
                 cost = self.xp.array(epochCost).mean()
                 # cost = "not calculating for now"
@@ -113,15 +124,7 @@ class Network(object):
         nabla_w = [None for w in self.weights]
 
         # forward pass
-        activation = x
-        activations = [x]  # list to store all the activations, layer by layer
-        zs = []  # list to store all the z vectors, layer by layer
-        for b, w, af in zip(self.biases, self.weights, self.activations):
-            preActiv = self.xp.dot(w, activation) + b
-            cp.cuda.Stream.null.synchronize()
-            zs.append(preActiv)
-            activation = af(preActiv)
-            activations.append(activation)
+        zs, activations, activation = self.feedforward(x)
 
         # Mean cost of whole batch
         cost = self.loss(activation, y).mean()
@@ -147,7 +150,10 @@ class Network(object):
         # return (nabla_b, nabla_w, None)
 
     def get_accuracy(self, testX, testY):
-        y_hat = self.feedforward(testX)
+        # testY should NOT be one hot encoded for this to work
+        # The code at the start of training takes care of it if testY was onehot encoded
+        # when passed into the train func
+        _, _, y_hat = self.feedforward(testX)
         cp.cuda.Stream.null.synchronize()
-        pred = y_hat.argmax(axis=0).reshape(1, -1)
-        return (testY == pred).sum()
+        preds = y_hat.argmax(axis=0).reshape(1, -1)
+        return (testY == preds).sum()
