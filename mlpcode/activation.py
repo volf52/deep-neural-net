@@ -2,49 +2,80 @@ from enum import Enum
 
 import cupy as cp
 
+
 RELU_EPSILON = 0.01
+
+# Add support for inplace derivatives
+
+
+def identity(x):
+    return x
+
+
+def identity_derivative(dA, z):
+    return cp.get_array_module(z).ones_like(z)
+
 
 
 def sigmoid(x):
+    "x should be of the shape (n_features, n_samples)"
     # xp allows a generic interface for cpu/gpu code
     xp = cp.get_array_module(x)
     return 1.0 / (1.0 + xp.exp(-x))
 
 
-def sigmoid_derivate(dA, x):
-    z = sigmoid(x)
+def sigmoid_derivate(dA, z):
     return z * (1 - z)
 
 
 def tanh(x):
+    "x should be of the shape (n_features, n_samples)"
     xp = cp.get_array_module(x)
-    return xp.tanh(x)
+    return xp.tanh(x, out=x)
 
 
-def tanh_derivative(dA, x):
-    return 1 - tanh(x) ** 2
+def tanh_derivative(dA, z):
+    return 1 - z ** 2
 
 
 def softmax(x):
+    "x should be of the shape (n_features, n_samples)"
     xp = cp.get_array_module(x)
     # Subtracting the max to stabilise it (preventing ops with xp.Inf)
-    e_x = xp.exp(x - x.max(axis=0, keepdims=True))
+    tmp = x - x.max(axis=0)[xp.newaxis, :]
+    xp.exp(tmp, out=x)
     # Sum on axis 0 gives the number of classes
-    return e_x / e_x.sum(axis=0, keepdims=True)
+    x /= x.sum(axis=0)[xp.newaxis, :]
+
+    return x
 
 
-def softmax_derivative(dA, x):
-    z = softmax(x)
+def softmax_derivative(dA, z):
     return z * (1 - z)
 
 
 def relu(x):
+    "x should be of the shape (n_features, n_samples)"
+    xp = cp.get_array_module(x)
+    xp.clip(x, 0, xp.finfo(x.dtype).max, out=x)
+    return x
+
+
+def relu_derivative(dA, z):
+    dZ = dA.copy()
+    dZ[z <= 0] = 0
+    dZ[z > 0] = 1
+    return dZ
+
+
+def leaky_relu(x):
+    "x should be of the shape (n_features, n_samples)"
     A = x.copy()
     A[x <= 0] *= RELU_EPSILON
     return A
 
 
-def relu_derivative(dA, x):
+def leaky_relu_derivative(dA, z):
     dZ = dA.copy()
     dZ[x > 0] = 1
     dZ[x <= 0] = RELU_EPSILON
@@ -52,12 +83,13 @@ def relu_derivative(dA, x):
 
 
 def unitstep(x):
+    "x should be of the shape (n_features, n_samples)"
     xp = cp.get_array_module(x)
     return xp.sign(x)
 
 
-def hard_tanh(dA, x):
-    return x.clip(x, -1, 1)
+def hard_tanh(dA, z):
+    return z.clip(-1, 1)
 
 
 class ActivationFuncs(Enum):
@@ -66,6 +98,8 @@ class ActivationFuncs(Enum):
     relu = "relu"
     tanh = "tanh"
     sign = "unitstep"
+    leaky_relu = "leaky_relu"
+    identity = "identity"
 
     def __repr__(self):
         return self.value
@@ -80,6 +114,8 @@ ACTIVATION_FUNCTIONS = {
     ActivationFuncs.relu: relu,
     ActivationFuncs.tanh: tanh,
     ActivationFuncs.sign: unitstep,
+    ActivationFuncs.leaky_relu: leaky_relu,
+    ActivationFuncs.identity: identity,
 }
 
 ACTIVATION_DERIVATIVES = {
@@ -88,4 +124,6 @@ ACTIVATION_DERIVATIVES = {
     ActivationFuncs.softmax: softmax_derivative,
     ActivationFuncs.tanh: tanh_derivative,
     ActivationFuncs.sign: hard_tanh,
+    ActivationFuncs.leaky_relu: leaky_relu_derivative,
+    ActivationFuncs.identity: identity_derivative,
 }
