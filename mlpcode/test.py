@@ -12,10 +12,14 @@ trainX, trainY = read_train(useGpu=useGpu)
 testX, testY = read_test(useGpu=useGpu, encoded=False)
 print("Finished loading mnist data")
 layers = [784, 64, 10]
-epochs = 100
+epochs = 500
 print("Creating neural net")
 # Don't use cross entropy until I include a method to turn Y labels to one-hot-encoded vectors
 nn = Network(
-    layers, useGpu=useGpu, hiddenAf=af.relu, outAf=af.sigmoid, lossF=lf.mse,
+    layers,
+    useGpu=useGpu,
+    hiddenAf=af.leaky_relu,
+    outAf=af.softmax,
+    lossF=lf.cross_entropy,
 )
-nn.train(trainX, trainY, epochs, 600, 3.0, testX, testY)
+nn.train(trainX, trainY, epochs, 600, 1e-3, testX, testY)

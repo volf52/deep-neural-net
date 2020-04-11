@@ -16,7 +16,6 @@ def identity_derivative(dA, z):
     return cp.get_array_module(z).ones_like(z)
 
 
-
 def sigmoid(x):
     "x should be of the shape (n_features, n_samples)"
     # xp allows a generic interface for cpu/gpu code
@@ -25,7 +24,8 @@ def sigmoid(x):
 
 
 def sigmoid_derivate(dA, z):
-    return z * (1 - z)
+    a = sigmoid(z)
+    return a * (1 - a)
 
 
 def tanh(x):
@@ -35,7 +35,8 @@ def tanh(x):
 
 
 def tanh_derivative(dA, z):
-    return 1 - z ** 2
+    xp = cp.get_array_module(z)
+    return 1 - xp.tanh(z) ** 2
 
 
 def softmax(x):
@@ -51,7 +52,10 @@ def softmax(x):
 
 
 def softmax_derivative(dA, z):
-    return z * (1 - z)
+    # a = softmax(z)
+    # return a * (1 - a)
+    # No need for it actually
+    return cp.get_array_module(z).ones_like(z)
 
 
 def relu(x):
@@ -77,8 +81,8 @@ def leaky_relu(x):
 
 def leaky_relu_derivative(dA, z):
     dZ = dA.copy()
-    dZ[x > 0] = 1
-    dZ[x <= 0] = RELU_EPSILON
+    dZ[z > 0] = 1
+    dZ[z <= 0] = RELU_EPSILON
     return dZ
 
 

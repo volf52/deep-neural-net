@@ -6,37 +6,25 @@ from enum import Enum
 # Y_hat is model output, and Y is the real label/output
 # The expected dimensions are k * m, where k in no of neurons in the output, and m is the batchsize
 
-# Don't use cross entropy until I include a method to turn Y labels to one-hot-encoded vectors
-# https://github.com/scikit-learn/scikit-learn/blob/95d4f0841/sklearn/metrics/_classification.py#L2176
+# TODO: Look at https://github.com/scikit-learn/scikit-learn/blob/95d4f0841/sklearn/metrics/_classification.py#L2176
 def cross_entropy_loss(Y_hat, Y):
     m = Y_hat.shape[1]
     xp = cp.get_array_module(Y_hat)
 
-    # Y_hat[xp.isclose(Y_hat, 0.0000001)] += 2.2251e-308
-
-    cost = (-1.0 / m) * (
-        xp.log(Y_hat).T.dot(Y) + xp.log(1 - Y_hat).T.dot((1 - Y))
-    )
-    # No need to squeeze as the mean in backprop will take care of it
-    return cost
-
-
-# def check_zero_one(arr):
-#     xp = cp.get_array_module(arr)
-#     return xp.logical_or(xp.equal(arr, 0), xp.equal(arr, 1))
+    L_sum = xp.sum(xp.multiply(Y, xp.log(Y_hat)))
+    L = -(1.0 / m) * L_sum
+    return L
 
 
 def cross_entropy_derivative(Y_hat, Y):
-    xp = cp.get_array_module(Y_hat)
-
-    # Y_hat[check_zero_one(Y_hat)] += 0000000000.1
-
-    return -(xp.divide(Y, Y_hat) - xp.divide(1 - Y, 1 - Y_hat))
+    # xp = cp.get_array_module(Y_hat)
+    # return -(xp.divide(Y, Y_hat) - xp.divide(1 - Y, 1 - Y_hat))
+    return Y_hat - Y
 
 
 def mse(Y_hat, Y):
     # Error is summed across the output neurons
-    return 0.5 * ((Y - Y_hat) ** 2).sum(axis=0)
+    return 0.5 * ((Y_hat - Y) ** 2).sum(axis=0)
 
 
 def mse_derivative(Y_hat, Y):
