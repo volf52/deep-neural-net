@@ -2,6 +2,8 @@ from enum import Enum
 
 import cupy as cp
 
+RELU_EPSILON = 0.01
+
 
 def sigmoid(x):
     # xp allows a generic interface for cpu/gpu code
@@ -38,13 +40,14 @@ def softmax_derivative(dA, x):
 
 def relu(x):
     A = x.copy()
-    A[x <= 0] *= 0.01
+    A[x <= 0] *= RELU_EPSILON
     return A
 
 
 def relu_derivative(dA, x):
     dZ = dA.copy()
-    dZ[x <= 0] = 0.01
+    dZ[x > 0] = 1
+    dZ[x <= 0] = RELU_EPSILON
     return dZ
 
 
