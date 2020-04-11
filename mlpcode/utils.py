@@ -23,7 +23,7 @@ def loadData(load_func, useGpu=True):
     data, labels = load_func()
 
     return (
-        xp.array(data, dtype=xp.float64),
+        xp.array(data, dtype=xp.float64) / 255.0,
         xp.array(labels, dtype=xp.uint8).reshape(-1, 1),
     )
 
