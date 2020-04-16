@@ -1,6 +1,4 @@
-from mlpcode.activation import ACTIVATION_DERIVATIVES, ACTIVATION_FUNCTIONS
 from mlpcode.activation import ActivationFuncs as af
-from mlpcode.loss import LOSS_DERIVATES, LOSS_FUNCS
 from mlpcode.loss import LossFuncs as lf
 from mlpcode.network import Network
 from mlpcode.utils import read_test, read_train
