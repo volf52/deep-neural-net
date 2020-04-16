@@ -75,14 +75,18 @@ class Network(object):
         testX=None,
         testY=None,
     ):
-        if testX is not None:
+        n = len(trainX)
+        if testX is None:
+            n_test = n
+            testX = trainX.copy().T
+            testY = trainY.copy()
+        else:
             n_test = len(testX)
             testX = testX.T
             # No need to keep this in hot vector encoded form
-            if testY.shape[0] != testY.size:
-                testY = testY.argmax(axis=1).reshape(1, -1)
-            testY = testY.reshape(1, -1)
-        n = len(trainX)
+        if testY.shape[0] != testY.size:
+            testY = testY.argmax(axis=1)
+        testY = testY.reshape(1, -1)
         print("Starting training")
         for j in range(epochs):
             # random shuffling
@@ -106,14 +110,18 @@ class Network(object):
                 cp.cuda.Stream.null.synchronize()
                 acc = correct * 100.0 / n_test
                 cost = self.xp.array(epochCost).mean()
-                # cost = "not calculating for now"
                 print(
-                    "Epoch {0}: {1} / {2} ({3}%)\tLoss: {4:.02f}".format(
-                        j + 1, correct, n_test, acc, float(cost)
+                    "Epoch {0}: {1} / {2} ({3:.05f}%)\tTest Loss: {4:.02f}".format(
+                        j + 1, correct, n_test, float(acc), float(cost)
                     )
                 )
             else:
-                print("Epoch {0} complete".format(j))
+                cost = self.xp.array(epochCost).mean()
+                print(
+                    "Epoch {0}\tTrain Loass {1:.02f}".format(
+                        j + 1, float(cost)
+                    )
+                )
 
     def update_mini_batch(self, mini_batch, eta):
         x, y = mini_batch
