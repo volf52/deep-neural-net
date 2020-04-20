@@ -1,0 +1,1 @@
+Keep Fashion-MNIST dataset here. Make sure it is uncompressed

@@ -3,53 +3,108 @@ from pathlib import Path
 
 import cupy as cp
 import numpy as np
-from mnist import MNIST
 
 # Data dir is just a folder named 'data' in the same directory where this file exists. It should contain
 # mnist data (all four files, uncompressed)
 DATA_DIR: Path = Path(__file__).parent / "data"
 assert DATA_DIR.exists()
 
-mnist_data = MNIST(DATA_DIR)
+MNIST_DIR: Path = DATA_DIR / "mnist"
+FASHION_MNIST_DIR: Path = DATA_DIR / "fashion-mnist"
+MNIST_C_DIR: Path = DATA_DIR / "mnist-c"
 
 MNIST_CLASSES = 10
+
+FASHION_MNIST_CLASSES = [
+    "T-shirt/top",
+    "Trouser",
+    "Pullover",
+    "Dress",
+    "Coat",
+    "Sandal",
+    "Shirt",
+    "Sneaker",
+    "Bag",
+    "Ankle boot",
+]
 
 
 def oneHotEncoding(classes: int, y):
     xp = cp.get_array_module(y)
-    return xp.eye(classes)[y.astype("int32")]
+    return xp.eye(classes, dtype=xp.uint8)[y.astype("int32")]
 
 
-def loadData(load_func, useGpu=True, encoded=True, classes=MNIST_CLASSES):
+def loadFile(
+    file_pth: Path, num_instances: int, num_features: int, useGpu=True,
+):
     if useGpu:
         xp = cp
     else:
         xp = np
 
-    data, labels = load_func()
+    with file_pth.open("rb") as f:
+        data = xp.fromfile(
+            f, dtype=xp.uint8, count=num_instances * num_features
+        )
 
-    X = xp.array(data, dtype=xp.float64) / 255.0
-    y = xp.array(labels, dtype=xp.uint8)
+    return data
 
+
+def loadX(file_pth: Path, num_instances: int, num_features: int, useGpu=True):
+    X = (
+        loadFile(file_pth, num_instances, num_features, useGpu)
+        .astype(np.float32)
+        .reshape(num_instances, num_features)
+    )
+    return X / 255.0
+
+
+def loadY(file_pth: Path, num_instances: int, useGpu=True, encoded=True):
+    y = loadFile(file_pth, num_instances, 1, useGpu).astype(np.int64)
     if encoded:
-        y = oneHotEncoding(classes, y)
+        y = oneHotEncoding(MNIST_CLASSES, y)
+    else:
+        y = y.reshape(-1, 1)
 
+    return y
+
+
+def loadTesting(dataDir: Path, useGpu=True, encoded=True):
+    xPth: Path = dataDir / "t10k-images-idx3-ubyte"
+    yPth: Path = dataDir / "t10k-labels-idx1-ubyte"
+    assert xPth.exists()
+    assert yPth.exists()
+    instances = 10000
+    X = loadX(xPth, instances, 784, useGpu)
+    y = loadY(yPth, instances, useGpu, encoded)
     return X, y
 
 
-def read_test(useGpu=True, encoded=True, classes=MNIST_CLASSES):
-    return loadData(mnist_data.load_testing, useGpu, encoded, classes)
+def loadTraining(dataDir: Path, useGpu=True, encoded=True):
+    xPth: Path = dataDir / "train-images-idx3-ubyte"
+    yPth: Path = dataDir / "train-labels-idx1-ubyte"
+    assert xPth.exists()
+    assert yPth.exists()
+    instances = 60000
+    X = loadX(xPth, instances, 784, useGpu)
+    y = loadY(yPth, instances, useGpu, encoded)
+    return X, y
 
 
-def read_train(useGpu=True, encoded=True, classes=MNIST_CLASSES):
-    return loadData(mnist_data.load_training, useGpu)
+def loadMnist(useGpu=True, encoded=True):
+    trainX, trainY = loadTraining(MNIST_DIR, useGpu, encoded)
+    testX, testY = loadTesting(MNIST_DIR, useGpu, encoded)
+    return trainX, trainY, testX, testY
+
+
+def loadFashionMnist(useGpu=True, encoded=True):
+    trainX, trainY = loadTraining(FASHION_MNIST_DIR, useGpu, encoded)
+    testX, testY = loadTesting(FASHION_MNIST_DIR, useGpu, encoded)
+    return trainX, trainY, testX, testY
 
 
 if __name__ == "__main__":
-    # Ensure that you change the '.' before idx to '-'
-    # example train-labels.idx1-ubyte to train-labels-idx1-ubyte
-    trainX, trainY = read_train()
-    testX, testY = read_test()
+    trainX, trainY, testX, testY = loadMnist()
 
     print(trainX.shape)
     print(trainY.shape)
