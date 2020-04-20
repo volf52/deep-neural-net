@@ -1,0 +1,1 @@
+Keep MNIST dataset here. Make sure it is uncompressed

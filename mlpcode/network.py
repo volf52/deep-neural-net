@@ -57,8 +57,10 @@ class Network(object):
         a = x
         activations = [x]  # list to store all the activations, layer by layer
         zs = []  # list to store all the z vectors, layer by layer
+        # (num_features, num_examples)
         for b, w, af in zip(self.biases, self.weights, self.activations):
             z = self.xp.dot(w, a) + b
+            #
             cp.cuda.Stream.null.synchronize()
             zs.append(z)
             a = af(z)
@@ -128,6 +130,18 @@ class Network(object):
         m = x.shape[0] * 1.0
         delta_nabla_b, delta_nabla_w, cost = self.backprop(x.T, y.T)
         cp.cuda.Stream.null.synchronize()
+        # matrix.sum(axis=0) => 3
+        # matrix.sum(axis=1) => 6
+        # [1,2,3]
+        # [1,2,3]
+        # [1,2,3]
+
+        # matrix.sum(axis=0) => 3
+        # matrix.sum(axis=1) => 10
+        # [1,2,3,4]
+        # [1,2,3,4]
+        # [1,2,3,4]
+
         nabla_b = [nb.mean(axis=1, keepdims=True) for nb in delta_nabla_b]
         nabla_w = [(nw / m) for nw in delta_nabla_w]
         cp.cuda.Stream.null.synchronize()
@@ -146,7 +160,7 @@ class Network(object):
         # Mean cost of whole batch
         cost = self.loss(activation, y).mean()
         # backward pass
-        dLdA = self.loss_derivative(activation, y)  # expected shape: k * m
+        dLdA = self.loss_derivative(activation, y)  # expected shape: k * n
         cp.cuda.Stream.null.synchronize()
         if self.outAF in (af.softmax, af.identity):
             delta = dLdA
