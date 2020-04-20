@@ -21,7 +21,22 @@ MNIST_CLASSES = 10
 class DATASETS(Enum):
     mnist = "mnist"
     fashion = "fashion-mnist"
-    # mnistc = "mnist-c"
+    mnistc_brightness = "mnist_c-brightness"
+    mnistc_canny_edges = "mnist_c-canny_edges"
+    mnistc_dotted_line = "mnist_c-dotted_line"
+    mnistc_fog = "mnist_c-fog"
+    mnistc_glass_blur = "mnist_c-glass_blur"
+    mnistc_identity = "mnist_c-identity"
+    mnistc_impulse_noise = "mnist_c-impulse_noise"
+    mnistc_motion_blur = "mnist_c-motion_blur"
+    mnistc_rotate = "mnist_c-rotate"
+    mnistc_scale = "mnist_c-scale"
+    mnistc_shear = "mnist_c-shear"
+    mnistc_shot_noise = "mnist_c-shot_noise"
+    mnistc_spatter = "mnist_c-spatter"
+    mnistc_stripe = "mnist_c-stripe"
+    mnistc_translate = "mnist_c-translate"
+    mnistc_zigzag = "mnist_c-zigzag"
 
     def __repr__(self):
         return self.value
@@ -49,7 +64,7 @@ def oneHotEncoding(classes: int, y):
     return xp.eye(classes, dtype=xp.uint8)[y]
 
 
-def loadFile(
+def loadIdxFile(
     file_pth: Path, isTest: bool, useGpu=True,
 ):
     if useGpu:
@@ -79,17 +94,33 @@ def loadFile(
     return data
 
 
-def loadX(file_pth: Path, num_instances: int, num_features: int, useGpu=True):
+def loadNpyFile(file_pth: Path, isTest: bool, useGpu=True):
+    if useGpu:
+        xp = cp
+    else:
+        xp = np
+    with file_pth.open("rb") as f:
+        data = xp.load(f)
+    return data
+
+
+def loadX(
+    file_pth: Path,
+    loadFunc,
+    num_instances: int,
+    num_features: int,
+    useGpu=True,
+):
     X = (
-        loadFile(file_pth, False, useGpu)
+        loadFunc(file_pth, False, useGpu)
         .astype(np.float32)
         .reshape(num_instances, num_features)
     )
     return X / 255.0
 
 
-def loadY(file_pth: Path, num_instances: int, useGpu=True, encoded=True):
-    y = loadFile(file_pth, True, useGpu)
+def loadY(file_pth: Path, loadFunc, useGpu=True, encoded=True):
+    y = loadFunc(file_pth, True, useGpu)
     if encoded:
         y = oneHotEncoding(MNIST_CLASSES, y)
     else:
@@ -104,8 +135,8 @@ def loadTesting(dataDir: Path, useGpu=True, encoded=True):
     assert xPth.exists()
     assert yPth.exists()
     instances = 10000
-    X = loadX(xPth, instances, 784, useGpu)
-    y = loadY(yPth, instances, useGpu, encoded)
+    X = loadX(xPth, loadIdxFile, instances, 784, useGpu)
+    y = loadY(yPth, loadIdxFile, useGpu, encoded)
     return X, y
 
 
@@ -115,9 +146,45 @@ def loadTraining(dataDir: Path, useGpu=True, encoded=True):
     assert xPth.exists()
     assert yPth.exists()
     instances = 60000
-    X = loadX(xPth, instances, 784, useGpu)
-    y = loadY(yPth, instances, useGpu, encoded)
+    X = loadX(xPth, loadIdxFile, instances, 784, useGpu)
+    y = loadY(yPth, loadIdxFile, useGpu, encoded)
     return X, y
+
+
+def loadNpyTesting(dataDir: Path, useGpu=True, encoded=True):
+    xPth = dataDir / "test_images.npy"
+    yPth = dataDir / "test_labels.npy"
+    assert xPth.exists()
+    assert yPth.exists()
+    instances = 10000
+    X = loadX(xPth, loadNpyFile, instances, 784, useGpu)
+    y = loadY(yPth, loadNpyFile, useGpu, encoded)
+    return X, y
+
+
+def loadNpyTraining(dataDir: Path, useGpu=True, encoded=True):
+    xPth = dataDir / "train_images.npy"
+    yPth = dataDir / "train_labels.npy"
+    assert xPth.exists()
+    assert yPth.exists()
+    instances = 60000
+    X = loadX(xPth, loadNpyFile, instances, 784, useGpu)
+    y = loadY(yPth, loadNpyFile, useGpu, encoded)
+    return X, y
+
+
+def loadMnistC(category: DATASETS, useGpu=True, encoded=True):
+    val: str = str(category)
+    assert val.startswith("mnist_c")
+    subCat = val.split("-")[-1]
+    dirPth: Path = MNIST_C_DIR / subCat
+
+    assert dirPth.exists()
+    assert dirPth.is_dir()
+
+    trainX, trainY = loadNpyTraining(dirPth, useGpu, encoded)
+    testX, testY = loadNpyTesting(dirPth, useGpu, encoded)
+    return trainX, trainY, testX, testY
 
 
 def loadMnist(useGpu=True, encoded=True):
@@ -136,11 +203,15 @@ LOADING_FUNCS = {DATASETS.mnist: loadMnist, DATASETS.fashion: loadFashionMnist}
 
 
 def loadDataset(dataset: DATASETS, useGpu=True, encoded=True):
-    return LOADING_FUNCS[dataset](useGpu, encoded)
+    if str(dataset).startswith("mnist_c"):
+        return loadMnistC(dataset)
+    else:
+        return LOADING_FUNCS[dataset](useGpu, encoded)
 
 
 if __name__ == "__main__":
-    trainX, trainY, testX, testY = loadDataset(DATASETS.fashion)
+    # trainX, trainY, testX, testY = loadDataset(DATASETS.fashion)
+    trainX, trainY, testX, testY = loadDataset(DATASETS.mnistc_identity)
 
     print(trainX.shape)
     print(trainY.shape)
