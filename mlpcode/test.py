@@ -4,7 +4,7 @@ from mlpcode.network import Network
 from mlpcode.utils import DATASETS, loadDataset
 
 useGpu = True
-dataset = DATASETS.fashion
+dataset = DATASETS.mnistc_rotate
 print("Loading {}".format(dataset))
 trainX, trainY, testX, testY = loadDataset(DATASETS.fashion)
 print("Finished loading {} data".format(dataset))
