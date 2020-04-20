@@ -1,12 +1,13 @@
 from mlpcode.activation import ActivationFuncs as af
 from mlpcode.loss import LossFuncs as lf
 from mlpcode.network import Network
-from mlpcode.utils import loadMnist, loadFashionMnist
+from mlpcode.utils import DATASETS, loadDataset
 
 useGpu = True
-print("Loading data")
-trainX, trainY, testX, testY = loadMnist()
-print("Finished loading mnist data")
+dataset = DATASETS.fashion
+print("Loading {}".format(dataset))
+trainX, trainY, testX, testY = loadDataset(DATASETS.fashion)
+print("Finished loading {} data".format(dataset))
 layers = [784, 64, 10]
 epochs = 500
 print("Creating neural net")
