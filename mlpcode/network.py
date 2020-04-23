@@ -12,6 +12,7 @@ class Network(object):
         self,
         sizes,
         useGpu=False,
+        binarized = False,
         hiddenAf: af = af.sigmoid,
         outAf: af = af.sigmoid,
         lossF: lf = lf.mse,
@@ -33,12 +34,20 @@ class Network(object):
         else:
             self.xp = np
         self.sizes = sizes
-        self.biases = [self.xp.random.randn(y, 1) for y in sizes[1:]]
-        # Xavier init
-        self.weights = [
-            (self.xp.random.randn(l, l_minus_1) * self.xp.sqrt(1 / l_minus_1))
-            for l_minus_1, l in zip(sizes[:-1], sizes[1:])
-        ]
+        self.isBinarized = binarized
+        if binarized:
+            self.biases = [self.xp.random.choice([-1, 1], size=(y, 1)) for y in sizes[1:]]
+            self.weights = [
+                self.xp.random.choice([-1, 1], size=(l, l_minus_1))
+                for l_minus_1, l in zip(sizes[:-1], sizes[1:])
+            ]
+        else:
+            self.biases = [self.xp.random.randn(y, 1) for y in sizes[1:]]
+            # Xavier init
+            self.weights = [
+                (self.xp.random.randn(l, l_minus_1) * self.xp.sqrt(1 / l_minus_1))
+                for l_minus_1, l in zip(sizes[:-1], sizes[1:])
+            ]
         cp.cuda.Stream.null.synchronize()
         self.loss = LOSS_FUNCS[lossF]
         self.loss_derivative = LOSS_DERIVATES[lossF]
@@ -60,7 +69,6 @@ class Network(object):
         # (num_features, num_examples)
         for b, w, af in zip(self.biases, self.weights, self.activations):
             z = self.xp.dot(w, a) + b
-            #
             cp.cuda.Stream.null.synchronize()
             zs.append(z)
             a = af(z)
@@ -78,6 +86,8 @@ class Network(object):
         testY=None,
     ):
         n = len(trainX)
+        costList = []
+        accList = []
         if testX is None:
             n_test = n
             testX = trainX.copy().T
@@ -112,6 +122,8 @@ class Network(object):
                 cp.cuda.Stream.null.synchronize()
                 acc = correct * 100.0 / n_test
                 cost = self.xp.array(epochCost).mean()
+                accList.append(acc)
+                costList.append(cost)
                 print(
                     "Epoch {0}: {1} / {2} ({3:.05f}%)\tTest Loss: {4:.02f}".format(
                         j + 1, correct, n_test, float(acc), float(cost)
@@ -119,11 +131,14 @@ class Network(object):
                 )
             else:
                 cost = self.xp.array(epochCost).mean()
+                costList.append(cost)
                 print(
                     "Epoch {0}\tTrain Loass {1:.02f}".format(
                         j + 1, float(cost)
                     )
                 )
+
+        return costList, accList
 
     def update_mini_batch(self, mini_batch, eta):
         x, y = mini_batch
@@ -147,6 +162,12 @@ class Network(object):
         cp.cuda.Stream.null.synchronize()
         self.weights = [w - (eta * nw) for w, nw in zip(self.weights, nabla_w)]
         self.biases = [b - (eta * nb) for b, nb in zip(self.biases, nabla_b)]
+        # Binarize weights and biases
+        if self.isBinarized:
+            # Make sure the updates have been made and all threads have joined
+            cp.cuda.Stream.null.synchronize()
+            self.weights = [self.xp.sign(w) for w in self.weights]
+            self.biases = [self.xp.sign(b) for b in self.biases]
         cp.cuda.Stream.null.synchronize()
         return cost
 

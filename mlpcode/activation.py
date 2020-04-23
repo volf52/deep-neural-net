@@ -93,6 +93,7 @@ def unitstep(x):
 
 
 def hard_tanh(dA, z):
+    # equivalent to max(-1, min(z, 1))
     return z.clip(-1, 1)
 
 
