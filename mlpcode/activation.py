@@ -88,8 +88,9 @@ def leaky_relu_derivative(dA, z):
 
 def unitstep(x):
     "x should be of the shape (n_features, n_samples)"
-    xp = cp.get_array_module(x)
-    return xp.sign(x)
+    x[x>=0] = 1;
+    x[x<0] = -1
+    return x
 
 
 def hard_tanh(dA, z):
