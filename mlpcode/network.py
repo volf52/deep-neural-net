@@ -2,7 +2,7 @@ import cupy as cp
 import numpy as np
 
 from mlpcode.activation import ACTIVATION_DERIVATIVES, ACTIVATION_FUNCTIONS
-from mlpcode.activation import ActivationFuncs as af, unitstep as binarize
+from mlpcode.activation import ActivationFuncs as af, hard_sigmoid
 from mlpcode.loss import LOSS_DERIVATES, LOSS_FUNCS
 from mlpcode.loss import LossFuncs as lf
 
@@ -35,24 +35,12 @@ class Network(object):
             self.xp = np
         self.sizes = sizes
         self.isBinarized = binarized
-        if binarized:
-            self.biases = [
-                self.xp.random.choice([-1, 1], size=(y, 1)) for y in sizes[1:]
-            ]
-            self.weights = [
-                self.xp.random.choice([-1, 1], size=(l, l_minus_1))
-                for l_minus_1, l in zip(sizes[:-1], sizes[1:])
-            ]
-        else:
-            self.biases = [self.xp.random.randn(y, 1) for y in sizes[1:]]
-            # Xavier init
-            self.weights = [
-                (
-                    self.xp.random.randn(l, l_minus_1)
-                    * self.xp.sqrt(1 / l_minus_1)
-                )
-                for l_minus_1, l in zip(sizes[:-1], sizes[1:])
-            ]
+        # Xavier init
+        self.biases = [self.xp.random.randn(y, 1) for y in sizes[1:]]
+        self.weights = [
+            (self.xp.random.randn(l, l_minus_1) * self.xp.sqrt(1 / l_minus_1))
+            for l_minus_1, l in zip(sizes[:-1], sizes[1:])
+        ]
         cp.cuda.Stream.null.synchronize()
         self.loss = LOSS_FUNCS[lossF]
         self.loss_derivative = LOSS_DERIVATES[lossF]
@@ -143,9 +131,20 @@ class Network(object):
 
         return costList, accList
 
+    def binarize(self, x):
+        x = hard_sigmoid(x)
+        x[x >= 0.5] = 1
+        x[x < 0.5] = -1
+        return x
+        # return x.clip(-1, 1)
+
     def update_mini_batch(self, mini_batch, eta):
         x, y = mini_batch
         m = x.shape[0] * 1.0
+        if self.isBinarized:
+            self.weights = [self.binarize(w) for w in self.weights]
+            self.biases = [self.binarize(b) for b in self.biases]
+            cp.cuda.Stream.null.synchronize()
         delta_nabla_b, delta_nabla_w, cost = self.backprop(x.T, y.T)
         cp.cuda.Stream.null.synchronize()
         # matrix.sum(axis=0) => 3
@@ -163,17 +162,16 @@ class Network(object):
         nabla_b = [nb.mean(axis=1, keepdims=True) for nb in delta_nabla_b]
         nabla_w = [(nw / m) for nw in delta_nabla_w]
         cp.cuda.Stream.null.synchronize()
-        old_weights = self.weights[:]
-        old_biases = self.biases[:]
+        # old_weights = self.weights[:]
+        # old_biases = self.biases[:]
         self.weights = [w - (eta * nw) for w, nw in zip(self.weights, nabla_w)]
         self.biases = [b - (eta * nb) for b, nb in zip(self.biases, nabla_b)]
-        # Binarize weights and biases
-        if self.isBinarized:
-            # Make sure the updates have been made and all threads have joined
-            cp.cuda.Stream.null.synchronize()
-            self.weights = [binarize(w) for w in self.weights]
-            self.biases = [binarize(b) for b in self.biases]
         cp.cuda.Stream.null.synchronize()
+        if self.isBinarized:
+            self.weights = [self.xp.clip(w, -1.0, 1.0) for w in self.weights]
+            self.biases = [self.xp.clip(b, -1.0, 1.0) for b in self.biases]
+            cp.cuda.Stream.null.synchronize()
+
         return cost
 
     def backprop(self, x, y):

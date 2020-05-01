@@ -17,7 +17,7 @@ nn = Network(
     hiddenAf=af.sign,
     outAf=af.softmax,
     lossF=lf.cross_entropy,
-    binarized=True
+    binarized=True,
 )
 
-nn.train(trainX, trainY, epochs, 100, 0.007, testX, testY)
+nn.train(trainX, trainY, epochs, 100, 0.003, testX, testY)
