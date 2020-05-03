@@ -2,16 +2,18 @@ import cupy as cp
 import numpy as np
 
 from mlpcode.activation import ACTIVATION_DERIVATIVES, ACTIVATION_FUNCTIONS
-from mlpcode.activation import ActivationFuncs as af
+from mlpcode.activation import ActivationFuncs as af, unitstep as binarize
 from mlpcode.loss import LOSS_DERIVATES, LOSS_FUNCS
 from mlpcode.loss import LossFuncs as lf
-import os
+from mlpcode.utils import saveNpy, loadWeightsBiasesNpy
+
 
 class Network(object):
     def __init__(
         self,
         sizes,
         useGpu=False,
+        fineTuning=False,
         hiddenAf: af = af.sigmoid,
         outAf: af = af.sigmoid,
         lossF: lf = lf.mse,
@@ -33,12 +35,18 @@ class Network(object):
         else:
             self.xp = np
         self.sizes = sizes
-        self.biases = [self.xp.random.randn(y, 1) for y in sizes[1:]]
-        # Xavier init
-        self.weights = [
-            (self.xp.random.randn(l, l_minus_1) * self.xp.sqrt(1 / l_minus_1))
-            for l_minus_1, l in zip(sizes[:-1], sizes[1:])
-        ]
+        if fineTuning:
+            self.weights, self.biases = loadWeightsBiasesNpy(self.xp)
+        else:
+            self.biases = [self.xp.random.randn(y, 1) for y in sizes[1:]]
+            # Xavier init
+            self.weights = [
+                (
+                    self.xp.random.randn(l, l_minus_1)
+                    * self.xp.sqrt(1 / l_minus_1)
+                )
+                for l_minus_1, l in zip(sizes[:-1], sizes[1:])
+                ]
         cp.cuda.Stream.null.synchronize()
         self.loss = LOSS_FUNCS[lossF]
         self.loss_derivative = LOSS_DERIVATES[lossF]
@@ -59,13 +67,10 @@ class Network(object):
         zs = []  # list to store all the z vectors, layer by layer
         # (num_features, num_examples)
         for b, w, af in zip(self.biases, self.weights, self.activations):
-            print(w.shape, a.shape, b.shape)
             z = self.xp.dot(w, a) + b
-            print(z.shape,'\n-----')
             cp.cuda.Stream.null.synchronize()
             zs.append(z)
             a = af(z)
-
             activations.append(a)
         return zs, activations, a
 
@@ -78,8 +83,13 @@ class Network(object):
         eta=1e-3,
         testX=None,
         testY=None,
+        save=False
     ):
+        best_weights, best_biases, best_accuracy = [], [], 0
+
         n = len(trainX)
+        costList = []
+        accList = []
         if testX is None:
             n_test = n
             testX = trainX.copy().T
@@ -114,18 +124,26 @@ class Network(object):
                 cp.cuda.Stream.null.synchronize()
                 acc = correct * 100.0 / n_test
                 cost = self.xp.array(epochCost).mean()
+                accList.append(acc)
+                costList.append(cost)
                 print(
                     "Epoch {0}: {1} / {2} ({3:.05f}%)\tTest Loss: {4:.02f}".format(
                         j + 1, correct, n_test, float(acc), float(cost)
                     )
                 )
+                if save and acc > best_accuracy:
+                    best_accuracy = acc
+                    best_weights = self.weights.copy()
+                    best_biases = self.biases.copy()
             else:
                 cost = self.xp.array(epochCost).mean()
+                costList.append(cost)
                 print(
-                    "Epoch {0}\tTrain Loass {1:.02f}".format(
-                        j + 1, float(cost)
-                    )
+                    "Epoch {0}\tTrain Loss {1:.02f}".format(j + 1, float(cost))
                 )
+        if save:
+            saveNpy([best_weights, best_biases])
+        return costList, accList
 
     def update_mini_batch(self, mini_batch, eta):
         x, y = mini_batch
@@ -147,8 +165,11 @@ class Network(object):
         nabla_b = [nb.mean(axis=1, keepdims=True) for nb in delta_nabla_b]
         nabla_w = [(nw / m) for nw in delta_nabla_w]
         cp.cuda.Stream.null.synchronize()
+        old_weights = self.weights[:]
+        old_biases = self.biases[:]
         self.weights = [w - (eta * nw) for w, nw in zip(self.weights, nabla_w)]
         self.biases = [b - (eta * nb) for b, nb in zip(self.biases, nabla_b)]
+
         cp.cuda.Stream.null.synchronize()
         return cost
 
