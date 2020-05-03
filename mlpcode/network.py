@@ -5,7 +5,7 @@ from mlpcode.activation import ACTIVATION_DERIVATIVES, ACTIVATION_FUNCTIONS
 from mlpcode.activation import ActivationFuncs as af
 from mlpcode.loss import LOSS_DERIVATES, LOSS_FUNCS
 from mlpcode.loss import LossFuncs as lf
-
+import os
 
 class Network(object):
     def __init__(
@@ -59,11 +59,13 @@ class Network(object):
         zs = []  # list to store all the z vectors, layer by layer
         # (num_features, num_examples)
         for b, w, af in zip(self.biases, self.weights, self.activations):
+            print(w.shape, a.shape, b.shape)
             z = self.xp.dot(w, a) + b
-            #
+            print(z.shape,'\n-----')
             cp.cuda.Stream.null.synchronize()
             zs.append(z)
             a = af(z)
+
             activations.append(a)
         return zs, activations, a
 
