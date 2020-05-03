@@ -5,6 +5,7 @@ import cupy as cp
 import numpy as np
 import struct
 from enum import Enum
+import os
 
 # Data dir is just a folder named 'data' in the same directory where this file exists. It should contain
 # mnist data (all four files, uncompressed)
@@ -207,6 +208,33 @@ def loadDataset(dataset: DATASETS, useGpu=True, encoded=True):
         return loadMnistC(dataset)
     else:
         return LOADING_FUNCS[dataset](useGpu, encoded)
+
+# lst = [weights, biases]
+def saveNpy(lst : list, path = os.getcwd()):
+    xp = cp.get_array_module(lst[0])
+    if not os.path.isdir(path + '\\weights'):
+        os.mkdir(path + '\\weights')
+
+    if not os.path.isdir(path + '\\biases'):
+        os.mkdir(path + '\\biases')
+    for i, w in enumerate(lst[0]):
+        xp.save(path+'\\weights\\'+str(i)+'.npy', w)
+
+    for i, w in enumerate(lst[1]):
+        xp.save(path+'\\biases\\'+str(i)+'.npy', w)
+
+
+def loadWeightsBiasesNpy(xp, path=os.getcwd()):
+    assert os.path.isdir(path+'\\weights')
+    assert os.path.isdir(path+'\\biases')
+    weights, biases = [], []
+    for filename in os.listdir(path+'\\weights'):
+        weights.append(xp.load(path+'\\weights\\'+filename))
+
+    for filename in os.listdir(path+'\\biases'):
+        biases.append(xp.load(path+'\\biases\\'+filename))
+
+    return weights, biases
 
 
 if __name__ == "__main__":
