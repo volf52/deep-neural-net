@@ -1,17 +1,21 @@
 import cupy as cp
 import numpy as np
+from pathlib import Path
+from datetime import datetime
 
 from mlpcode.activation import ACTIVATION_DERIVATIVES, ACTIVATION_FUNCTIONS
 from mlpcode.activation import ActivationFuncs as af, hard_sigmoid
 from mlpcode.loss import LOSS_DERIVATES, LOSS_FUNCS
 from mlpcode.loss import LossFuncs as lf
+from mlpcode.utils import MODELDIR, DATASETS
 
 
 class Network(object):
     def __init__(
         self,
-        sizes,
+        layers,
         useGpu=False,
+        fineTuning=False,
         binarized=False,
         hiddenAf: af = af.sigmoid,
         outAf: af = af.sigmoid,
@@ -23,75 +27,127 @@ class Network(object):
         if lossF == lf.cross_entropy and outAf not in (af.sigmoid, af.softmax):
             # My implementation for normal derivative of cross entropy is not stable enough
             # Luckily, it comes down to (output - target) when used with sigmoid or softmax
-            raise ValueError(
-                "Gotta use sigmoid or softmax with cross entropy loss"
-            )
+            raise ValueError("Gotta use sigmoid or softmax with cross entropy loss")
 
-        # Not counting input layer
-        self.num_layers = len(sizes) - 1
         if useGpu:
             self.xp = cp
         else:
             self.xp = np
-        self.sizes = sizes
+
+        self.layers = layers
         self.isBinarized = binarized
-        # Xavier init
-        self.biases = [self.xp.random.randn(y, 1) for y in sizes[1:]]
-        self.weights = [
-            (self.xp.random.randn(l, l_minus_1) * self.xp.sqrt(1 / l_minus_1))
-            for l_minus_1, l in zip(sizes[:-1], sizes[1:])
-        ]
+
+        if fineTuning:
+            self.weights, self.biases = None, None
+        else:
+            # Xavier init
+            self.biases = [self.xp.random.randn(y, 1) for y in layers[1:]]
+            self.weights = [
+                (self.xp.random.randn(l, l_minus_1) * self.xp.sqrt(1 / l_minus_1))
+                for l_minus_1, l in zip(layers[:-1], layers[1:])
+            ]
+
         cp.cuda.Stream.null.synchronize()
         self.loss = LOSS_FUNCS[lossF]
         self.loss_derivative = LOSS_DERIVATES[lossF]
-        hiddenActivationFunc = ACTIVATION_FUNCTIONS[hiddenAf]
         self.hiddenDerivative = ACTIVATION_DERIVATIVES[hiddenAf]
         self.outAF = outAf
-        outputActivationFunc = ACTIVATION_FUNCTIONS[outAf]
         self.outputDerivative = ACTIVATION_DERIVATIVES[outAf]
-        self.activations = [
-            hiddenActivationFunc for _ in range(self.num_layers - 1)
-        ]
-        self.activations.append(outputActivationFunc)
-        assert len(self.activations) == self.num_layers  # len(sizes)
+        if not fineTuning:
+            # Not counting input layer
+            self.num_layers = len(layers) - 1
+            hiddenActivationFunc = ACTIVATION_FUNCTIONS[hiddenAf]
+            outputActivationFunc = ACTIVATION_FUNCTIONS[outAf]
+            self.activations = [
+                hiddenActivationFunc for _ in range(self.num_layers - 1)
+            ]
+            self.activations.append(outputActivationFunc)
+            assert len(self.activations) == self.num_layers  # len(layers)
+
+    @staticmethod
+    def fromModel(
+        filePth: Path,
+        useGpu=False,
+        hiddenAf: af = af.sigmoid,
+        outAf: af = af.sigmoid,
+        lossF: lf = lf.mse,
+    ):
+        assert filePth.exists()
+        nn = Network(
+            [],
+            useGpu=useGpu,
+            hiddenAf=hiddenAf,
+            outAf=outAf,
+            lossF=lossF,
+            fineTuning=True,
+        )
+        # If the file was saved using cupy, it would convert the weights (and biases)
+        # list to an object array, so allow_pickle and subsequent conversion is for that
+        with nn.xp.load(filePth, allow_pickle=True) as fp:
+            # If the file has been loaded using cupy, there is an extra layer to go through
+            if hasattr(fp, "files"):
+                npzfile = fp
+            else:
+                npzfile = fp.npz_file
+            # Weights, biases and layers
+            keyArr = npzfile.files
+            assert len(keyArr) == 3
+            # Conversion done for the same reason allow_pickle is used above
+            nn.weights = [nn.xp.array(x, dtype=nn.xp.float) for x in npzfile[keyArr[0]]]
+            nn.biases = [nn.xp.array(x, dtype=nn.xp.float) for x in npzfile[keyArr[1]]]
+            # Just to ensure consistency
+            nn.layers = list(map(int, fp[keyArr[2]]))
+            nn.num_layers = len(nn.layers) - 1
+            hiddenActivationFunc = ACTIVATION_FUNCTIONS[hiddenAf]
+            outputActivationFunc = ACTIVATION_FUNCTIONS[outAf]
+            nn.activations = [hiddenActivationFunc for _ in range(nn.num_layers - 1)]
+            nn.activations.append(outputActivationFunc)
+        return nn
 
     def feedforward(self, x):
         a = x
         activations = [x]  # list to store all the activations, layer by layer
         zs = []  # list to store all the z vectors, layer by layer
         # (num_features, num_examples)
-        for b, w, af in zip(self.biases, self.weights, self.activations):
+        for b, w, afunc in zip(self.biases, self.weights, self.activations):
             z = self.xp.dot(w, a) + b
             cp.cuda.Stream.null.synchronize()
             zs.append(z)
-            a = af(z)
+            a = afunc(z)
             activations.append(a)
         return zs, activations, a
 
     def train(
         self,
-        trainX,
-        trainY,
-        epochs,
-        mini_batch_size=1,
-        eta=1e-3,
-        testX=None,
-        testY=None,
+        trainX: np.array,
+        trainY: np.array,
+        epochs: int,
+        batch_size=1,
+        lr=1e-3,
+        valX=None,
+        valY=None,
+        save: DATASETS = None,
     ):
+        best_weights = [None for _ in self.layers]
+        best_biases = best_weights[:]
+        best_accuracy = -1.0
+
         n = len(trainX)
         costList = []
         accList = []
-        if testX is None:
+        if valX is None:
             n_test = n
-            testX = trainX.copy().T
-            testY = trainY.copy()
+            valX = trainX.copy().T
+            valY = trainY.copy()
+            accType = "Training"
         else:
-            n_test = len(testX)
-            testX = testX.T
-            # No need to keep this in hot vector encoded form
-        if testY.shape[0] != testY.size:
-            testY = testY.argmax(axis=1)
-        testY = testY.reshape(1, -1)
+            n_test = len(valX)
+            valX = valX.T
+            accType = "Validation"
+        # No need to keep this in hot vector encoded form
+        if valY.shape[0] != valY.size:
+            valY = valY.argmax(axis=1)
+        valY = valY.reshape(1, -1)
         print("Starting training")
         for j in range(epochs):
             # random shuffling
@@ -100,46 +156,41 @@ class Network(object):
             trainX = trainX[p, :]
             trainY = trainY[p, :]
 
-            mini_batches = [
-                (
-                    trainX[k : k + mini_batch_size, :],
-                    trainY[k : k + mini_batch_size, :],
-                )
-                for k in range(0, n, mini_batch_size)
+            batches = [
+                (trainX[k : k + batch_size, :], trainY[k : k + batch_size, :],)
+                for k in range(0, n, batch_size)
             ]
-            for mini_batch in mini_batches:
-                miniBatchCost = self.update_mini_batch(mini_batch, eta)
-                epochCost.append(miniBatchCost)
-            if testX is not None:
-                correct = self.get_accuracy(testX, testY)
-                cp.cuda.Stream.null.synchronize()
-                acc = correct * 100.0 / n_test
-                cost = self.xp.array(epochCost).mean()
-                accList.append(acc)
-                costList.append(cost)
-                print(
-                    "Epoch {0}: {1} / {2} ({3:.05f}%)\tTest Loss: {4:.02f}".format(
-                        j + 1, correct, n_test, float(acc), float(cost)
-                    )
-                )
-            else:
-                cost = self.xp.array(epochCost).mean()
-                costList.append(cost)
-                print(
-                    "Epoch {0}\tTrain Loss {1:.02f}".format(j + 1, float(cost))
-                )
+            for batch in batches:
+                batchCost = self.update_batch(batch, lr)
+                epochCost.append(batchCost)
 
+            correct = self.get_accuracy(valX, valY)
+            cp.cuda.Stream.null.synchronize()
+            acc = correct * 100.0 / n_test
+            cost = self.xp.array(epochCost).mean()
+            accList.append(acc)
+            costList.append(cost)
+            print(
+                "Epoch {0}:\t{1} Acc: {2} / {3} ({4:.05f}%)\t{5} Loss: {6:.02f}".format(
+                    j + 1, accType, correct, n_test, float(acc), accType, float(cost)
+                )
+            )
+
+            if save is not None and acc > best_accuracy:
+                best_accuracy = acc
+                best_weights = [w.copy() for w in self.weights]
+                best_biases = [b.copy() for b in self.biases]
+
+        if save is not None:
+            fName = f"{str(save)}_{datetime.utcnow().timestamp()}"
+            filePth = MODELDIR / fName
+            print(f"Saving model to {filePth}.npz")
+            self.xp.savez(filePth, best_weights, best_biases, self.layers)
         return costList, accList
 
-    def binarize(self, x):
-        x = hard_sigmoid(x)
-        x[x >= 0.5] = 1
-        x[x < 0.5] = -1
-        return x
-        # return x.clip(-1, 1)
+    def update_batch(self, batch, eta):
+        x, y = batch
 
-    def update_mini_batch(self, mini_batch, eta):
-        x, y = mini_batch
         m = x.shape[0] * 1.0
         if self.isBinarized:
             self.weights = [self.binarize(w) for w in self.weights]
@@ -166,6 +217,7 @@ class Network(object):
         # old_biases = self.biases[:]
         self.weights = [w - (eta * nw) for w, nw in zip(self.weights, nabla_w)]
         self.biases = [b - (eta * nb) for b, nb in zip(self.biases, nabla_b)]
+
         cp.cuda.Stream.null.synchronize()
         if self.isBinarized:
             self.weights = [self.xp.clip(w, -1.0, 1.0) for w in self.weights]
@@ -205,13 +257,12 @@ class Network(object):
             nabla_w[-l] = self.xp.dot(delta, activations[-l - 1].T)
             cp.cuda.Stream.null.synchronize()
         return (nabla_b, nabla_w, cost)
-        # return (nabla_b, nabla_w, None)
 
-    def get_accuracy(self, testX, testY):
+    def get_accuracy(self, X, y):
         # testY should NOT be one hot encoded for this to work
-        # The code at the start of training takes care of it if testY was onehot encoded
+        # The code at the start of training takes care of it if testY was one-hot encoded
         # when passed into the train func
-        _, _, y_hat = self.feedforward(testX)
+        _, _, y_hat = self.feedforward(X)
         cp.cuda.Stream.null.synchronize()
         preds = y_hat.argmax(axis=0).reshape(1, -1)
-        return (testY == preds).sum()
+        return (y == preds).sum()

@@ -4,16 +4,30 @@ from pathlib import Path
 import cupy as cp
 import numpy as np
 import struct
+import json
 from enum import Enum
 
-# Data dir is just a folder named 'data' in the same directory where this file exists. It should contain
-# mnist data (all four files, uncompressed)
-DATA_DIR: Path = Path(__file__).parent / "data"
-assert DATA_DIR.exists()
+# CONFIGURATION
+CONFIG_FILE = Path("./nn.config.json")
+if CONFIG_FILE.exists():
+    with CONFIG_FILE.open("r") as f:
+        config = json.load()
+else:
+    prnt = Path(__file__).parent
+    config = {"DATADIR": prnt / "data", "MODELDIR": prnt / "models"}
+    if not config["MODELDIR"].exists():
+        config["MODELDIR"].mkdir()
 
-MNIST_DIR: Path = DATA_DIR / "mnist"
-FASHION_MNIST_DIR: Path = DATA_DIR / "fashion-mnist"
-MNIST_C_DIR: Path = DATA_DIR / "mnist-c"
+# Data dir is just a folder named 'data' in the same directory where this file exists.
+# It should contain the required datasets on which the models are to be trained/tested
+DATADIR: Path = config["DATADIR"]
+assert DATADIR.exists()
+
+MODELDIR: Path = config["MODELDIR"]
+
+MNISTDIR: Path = DATADIR / "mnist"
+FASHIONMNISTDIR: Path = DATADIR / "fashion-mnist"
+MNISTCDIR: Path = DATADIR / "mnist-c"
 
 MNIST_CLASSES = 10
 
@@ -77,24 +91,21 @@ def loadIdxFile(
             magic, size = struct.unpack(">II", f.read(8))
             if magic != 2049:
                 raise ValueError(
-                    "Magic number mismatch for testing data. {} != 2049".format(
-                        magic
-                    )
+                    "Magic number mismatch for testing data. {} != 2049".format(magic)
                 )
         else:
             magic, size, rows, cols = struct.unpack(">IIII", f.read(16))
             if magic != 2051:
                 raise ValueError(
-                    "Magic number mismatch for testing data. {} != 2051".format(
-                        magic
-                    )
+                    "Magic number mismatch for testing data. {} != 2051".format(magic)
                 )
         data = xp.fromfile(f, dtype=xp.uint8)
 
     return data
 
 
-def loadNpyFile(file_pth: Path, isTest: bool, useGpu=True):
+def loadNpyFile(file_pth: Path, isTest, useGpu=True):
+    # isTest won't be used. It's just there for consistency (being able to use HOF)
     if useGpu:
         xp = cp
     else:
@@ -105,11 +116,7 @@ def loadNpyFile(file_pth: Path, isTest: bool, useGpu=True):
 
 
 def loadX(
-    file_pth: Path,
-    loadFunc,
-    num_instances: int,
-    num_features: int,
-    useGpu=True,
+    file_pth: Path, loadFunc, num_instances: int, num_features: int, useGpu=True,
 ):
     X = (
         loadFunc(file_pth, False, useGpu)
@@ -177,7 +184,7 @@ def loadMnistC(category: DATASETS, useGpu=True, encoded=True):
     val: str = str(category)
     assert val.startswith("mnist_c")
     subCat = val.split("-")[-1]
-    dirPth: Path = MNIST_C_DIR / subCat
+    dirPth: Path = MNISTCDIR / subCat
 
     assert dirPth.exists()
     assert dirPth.is_dir()
@@ -188,14 +195,14 @@ def loadMnistC(category: DATASETS, useGpu=True, encoded=True):
 
 
 def loadMnist(useGpu=True, encoded=True):
-    trainX, trainY = loadTraining(MNIST_DIR, useGpu, encoded)
-    testX, testY = loadTesting(MNIST_DIR, useGpu, encoded)
+    trainX, trainY = loadTraining(MNISTDIR, useGpu, encoded)
+    testX, testY = loadTesting(MNISTDIR, useGpu, encoded)
     return trainX, trainY, testX, testY
 
 
 def loadFashionMnist(useGpu=True, encoded=True):
-    trainX, trainY = loadTraining(FASHION_MNIST_DIR, useGpu, encoded)
-    testX, testY = loadTesting(FASHION_MNIST_DIR, useGpu, encoded)
+    trainX, trainY = loadTraining(FASHIONMNISTDIR, useGpu, encoded)
+    testX, testY = loadTesting(FASHIONMNISTDIR, useGpu, encoded)
     return trainX, trainY, testX, testY
 
 
