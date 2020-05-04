@@ -7,3 +7,6 @@ mlpcode.egg-info
 *-ubyte
 *.lock
 *.npy
+.dmypy.json
+models
+.idea

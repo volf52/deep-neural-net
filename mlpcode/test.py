@@ -1,17 +1,18 @@
 from mlpcode.activation import ActivationFuncs as af
 from mlpcode.loss import LossFuncs as lf
 from mlpcode.network import Network
-from mlpcode.utils import DATASETS, loadDataset
+from mlpcode.utils import DATASETS, loadDataset, MODELDIR
 
 useGpu = True
 dataset = DATASETS.mnistc_rotate
 print("Loading {}".format(dataset))
-trainX, trainY, testX, testY = loadDataset(DATASETS.fashion)
+trainX, trainY, testX, testY = loadDataset(dataset)
 print("Finished loading {} data".format(dataset))
 layers = [784, 64, 10]
-epochs = 500
+epochs = 10
 print("Creating neural net")
-# Don't use cross entropy until I include a method to turn Y labels to one-hot-encoded vectors
+
+# Creating from scratch
 nn = Network(
     layers,
     useGpu=useGpu,
@@ -20,4 +21,16 @@ nn = Network(
     lossF=lf.cross_entropy,
 )
 
-nn.train(trainX, trainY, epochs, 600, 1e-3, testX, testY)
+# Creating from a pretrained model
+# modelPath = MODELDIR / "mnist_c-rotate_1588597666.073832.npz"
+# assert modelPath.exists()
+# nn = Network.fromModel(
+#     modelPath,
+#     useGpu=True,
+#     hiddenAf=af.leaky_relu,
+#     outAf=af.softmax,
+#     lossF=lf.cross_entropy,
+# )
+
+# Save must be the name of the dataset, if we want to save the model
+nn.train(trainX, trainY, epochs, batch_size=600, lr=1e-3, save=dataset)
