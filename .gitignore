@@ -10,3 +10,4 @@ mlpcode.egg-info
 .dmypy.json
 models
 .idea
+nn.config.json

@@ -7,16 +7,24 @@ import struct
 import json
 from enum import Enum
 
+# TODO: Save the config
+prnt = Path(__file__).parent
+
 # CONFIGURATION
-CONFIG_FILE = Path("./nn.config.json")
+CONFIG_FILE = prnt / "nn.config.json"
 if CONFIG_FILE.exists():
+    print(f"Reading config from {CONFIG_FILE}")
     with CONFIG_FILE.open("r") as f:
-        config = json.load()
+        tmp = json.load(f)
+        config = {k: Path(tmp[k]) for k in tmp.keys()}
 else:
-    prnt = Path(__file__).parent
     config = {"DATADIR": prnt / "data", "MODELDIR": prnt / "models"}
     if not config["MODELDIR"].exists():
         config["MODELDIR"].mkdir()
+    with CONFIG_FILE.open("w") as f:
+        json.dump({k: str(config[k]) for k in config.keys()}, f)
+    print(f"Wrote config to {CONFIG_FILE}")
+
 
 # Data dir is just a folder named 'data' in the same directory where this file exists.
 # It should contain the required datasets on which the models are to be trained/tested

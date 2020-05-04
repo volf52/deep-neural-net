@@ -6,7 +6,7 @@ from enum import Enum
 # Y_hat is model output, and Y is the real label/output
 # The expected dimensions are k * m, where k in no of neurons in the output, and m is the batchsize
 
-# TODO: Look at https://github.com/scikit-learn/scikit-learn/blob/95d4f0841/sklearn/metrics/_classification.py#L2176
+# https://github.com/scikit-learn/scikit-learn/blob/95d4f0841/sklearn/metrics/_classification.py#L2176
 def cross_entropy_loss(Y_hat, Y):
     m = Y_hat.shape[1]
     xp = cp.get_array_module(Y_hat)

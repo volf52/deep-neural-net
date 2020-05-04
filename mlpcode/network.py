@@ -192,10 +192,12 @@ class Network(object):
         x, y = batch
 
         m = x.shape[0] * 1.0
-        if self.isBinarized:
-            self.weights = [self.binarize(w) for w in self.weights]
-            self.biases = [self.binarize(b) for b in self.biases]
-            cp.cuda.Stream.null.synchronize()
+
+        # if self.isBinarized:
+        #     self.weights = [self.binarize(w) for w in self.weights]
+        #     self.biases = [self.binarize(b) for b in self.biases]
+        #     cp.cuda.Stream.null.synchronize()
+
         delta_nabla_b, delta_nabla_w, cost = self.backprop(x.T, y.T)
         cp.cuda.Stream.null.synchronize()
         # matrix.sum(axis=0) => 3
@@ -219,10 +221,10 @@ class Network(object):
         self.biases = [b - (eta * nb) for b, nb in zip(self.biases, nabla_b)]
 
         cp.cuda.Stream.null.synchronize()
-        if self.isBinarized:
-            self.weights = [self.xp.clip(w, -1.0, 1.0) for w in self.weights]
-            self.biases = [self.xp.clip(b, -1.0, 1.0) for b in self.biases]
-            cp.cuda.Stream.null.synchronize()
+        # if self.isBinarized:
+        #     self.weights = [self.xp.clip(w, -1.0, 1.0) for w in self.weights]
+        #     self.biases = [self.xp.clip(b, -1.0, 1.0) for b in self.biases]
+        #     cp.cuda.Stream.null.synchronize()
 
         return cost
 
