@@ -4,7 +4,7 @@ from mlpcode.network import Network
 from mlpcode.utils import DATASETS, loadDataset, MODELDIR
 
 useGpu = True
-dataset = DATASETS.mnistc_rotate
+dataset = DATASETS.mnist
 print("Loading {}".format(dataset))
 trainX, trainY, testX, testY = loadDataset(dataset)
 print("Finished loading {} data".format(dataset))
@@ -16,9 +16,10 @@ print("Creating neural net")
 nn = Network(
     layers,
     useGpu=useGpu,
-    hiddenAf=af.leaky_relu,
+    hiddenAf=af.sign,
     outAf=af.softmax,
     lossF=lf.cross_entropy,
+    binarized=True,
 )
 
 # Creating from a pretrained model

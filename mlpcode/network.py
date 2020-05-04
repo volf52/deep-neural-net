@@ -4,7 +4,7 @@ from pathlib import Path
 from datetime import datetime
 
 from mlpcode.activation import ACTIVATION_DERIVATIVES, ACTIVATION_FUNCTIONS
-from mlpcode.activation import ActivationFuncs as af
+from mlpcode.activation import ActivationFuncs as af, hard_sigmoid
 from mlpcode.loss import LOSS_DERIVATES, LOSS_FUNCS
 from mlpcode.loss import LossFuncs as lf
 from mlpcode.utils import MODELDIR, DATASETS
@@ -16,6 +16,7 @@ class Network(object):
         layers,
         useGpu=False,
         fineTuning=False,
+        binarized=False,
         hiddenAf: af = af.sigmoid,
         outAf: af = af.sigmoid,
         lossF: lf = lf.mse,
@@ -34,6 +35,7 @@ class Network(object):
             self.xp = np
 
         self.layers = layers
+        self.isBinarized = binarized
 
         if fineTuning:
             self.weights, self.biases = None, None
@@ -44,6 +46,7 @@ class Network(object):
                 (self.xp.random.randn(l, l_minus_1) * self.xp.sqrt(1 / l_minus_1))
                 for l_minus_1, l in zip(layers[:-1], layers[1:])
             ]
+
         cp.cuda.Stream.null.synchronize()
         self.loss = LOSS_FUNCS[lossF]
         self.loss_derivative = LOSS_DERIVATES[lossF]
@@ -187,7 +190,12 @@ class Network(object):
 
     def update_batch(self, batch, eta):
         x, y = batch
+
         m = x.shape[0] * 1.0
+        if self.isBinarized:
+            self.weights = [self.binarize(w) for w in self.weights]
+            self.biases = [self.binarize(b) for b in self.biases]
+            cp.cuda.Stream.null.synchronize()
         delta_nabla_b, delta_nabla_w, cost = self.backprop(x.T, y.T)
         cp.cuda.Stream.null.synchronize()
         # matrix.sum(axis=0) => 3
@@ -205,10 +213,17 @@ class Network(object):
         nabla_b = [nb.mean(axis=1, keepdims=True) for nb in delta_nabla_b]
         nabla_w = [(nw / m) for nw in delta_nabla_w]
         cp.cuda.Stream.null.synchronize()
+        # old_weights = self.weights[:]
+        # old_biases = self.biases[:]
         self.weights = [w - (eta * nw) for w, nw in zip(self.weights, nabla_w)]
         self.biases = [b - (eta * nb) for b, nb in zip(self.biases, nabla_b)]
 
         cp.cuda.Stream.null.synchronize()
+        if self.isBinarized:
+            self.weights = [self.xp.clip(w, -1.0, 1.0) for w in self.weights]
+            self.biases = [self.xp.clip(b, -1.0, 1.0) for b in self.biases]
+            cp.cuda.Stream.null.synchronize()
+
         return cost
 
     def backprop(self, x, y):
