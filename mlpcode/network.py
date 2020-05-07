@@ -68,6 +68,7 @@ class Network(object):
     def fromModel(
         filePth: Path,
         useGpu=False,
+        binarized=False,
         hiddenAf: af = af.sigmoid,
         outAf: af = af.sigmoid,
         lossF: lf = lf.mse,
@@ -80,6 +81,7 @@ class Network(object):
             outAf=outAf,
             lossF=lossF,
             fineTuning=True,
+            binarized=binarized,
         )
         # If the file was saved using cupy, it would convert the weights (and biases)
         # list to an object array, so allow_pickle and subsequent conversion is for that
@@ -104,12 +106,24 @@ class Network(object):
             nn.activations.append(outputActivationFunc)
         return nn
 
+    @staticmethod
+    def binarize(x):
+        return x
+
     def feedforward(self, x):
         a = x
         activations = [x]  # list to store all the activations, layer by layer
         zs = []  # list to store all the z vectors, layer by layer
         # (num_features, num_examples)
-        for b, w, afunc in zip(self.biases, self.weights, self.activations):
+        if self.isBinarized:
+            zipObj = zip(
+                self.binarize(self.weights),
+                self.binarize(self.biases),
+                self.activations,
+            )
+        else:
+            zipObj = zip(self.weights, self.biases, self.activations)
+        for w, b, afunc in zipObj:
             z = self.xp.dot(w, a) + b
             cp.cuda.Stream.null.synchronize()
             zs.append(z)
@@ -180,6 +194,8 @@ class Network(object):
                 best_accuracy = acc
                 best_weights = [w.copy() for w in self.weights]
                 best_biases = [b.copy() for b in self.biases]
+
+        print("\nBest Accuracy:\t{0:.03f}%".format(float(best_accuracy)))
 
         if save is not None:
             fName = f"{str(save)}_{datetime.utcnow().timestamp()}"

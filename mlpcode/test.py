@@ -19,7 +19,7 @@ nn = Network(
     hiddenAf=af.sign,
     outAf=af.softmax,
     lossF=lf.cross_entropy,
-    binarized=True,
+    binarized=False,
 )
 
 # Creating from a pretrained model
