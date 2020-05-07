@@ -8,7 +8,7 @@ dataset = DATASETS.mnist
 print("Loading {}".format(dataset))
 trainX, trainY, testX, testY = loadDataset(dataset)
 print("Finished loading {} data".format(dataset))
-layers = [784, 500, 1000, 10]
+layers = [784, 500, 10]
 epochs = 100
 print("Creating neural net")
 
@@ -19,7 +19,7 @@ nn = Network(
     hiddenAf=af.leaky_relu,
     outAf=af.softmax,
     lossF=lf.cross_entropy,
-    binarized=False,
+    binarized=True,
 )
 
 # Creating from a pretrained model
