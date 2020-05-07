@@ -52,10 +52,8 @@ def softmax(x):
 
 
 def softmax_derivative(dA, z):
-    # a = softmax(z)
-    # return a * (1 - a)
-    # No need for it actually
-    return cp.get_array_module(z).ones_like(z)
+    a = softmax(z)
+    return a * (1 - a)
 
 
 def relu(x):
@@ -86,14 +84,22 @@ def leaky_relu_derivative(dA, z):
     return dZ
 
 
+def hard_sigmoid(x):
+    xp = cp.get_array_module(x)
+    return xp.clip((x + 1.0) / 2, 0.0, 1.0)
+
+
 def unitstep(x):
     "x should be of the shape (n_features, n_samples)"
-    xp = cp.get_array_module(x)
-    return xp.sign(x)
+    x[x >= 0] = 1
+    x[x < 0] = -1
+    return x
 
 
 def hard_tanh(dA, z):
+    # equivalent to max(-1, min(z, 1))
     return z.clip(-1, 1)
+    # return 2 * hard_sigmoid(z) - 1
 
 
 class ActivationFuncs(Enum):
