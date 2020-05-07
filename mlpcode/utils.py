@@ -7,7 +7,6 @@ import struct
 import json
 from enum import Enum
 
-# TODO: Save the config
 prnt = Path(__file__).parent
 
 # CONFIGURATION

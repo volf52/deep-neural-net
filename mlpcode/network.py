@@ -36,6 +36,9 @@ class Network(object):
 
         self.layers = layers
         self.isBinarized = binarized
+        if self.isBinarized:
+            self.non_binarized_weights = None
+            self.non_binarized_biases = None
 
         if fineTuning:
             self.weights, self.biases = None, None
@@ -108,22 +111,18 @@ class Network(object):
 
     @staticmethod
     def binarize(x):
-        return x
+        newX = x.copy()
+        newX[x >= 0] = 1
+        newX[x < 0] = -1
+        cp.cuda.Stream.null.synchronize()
+        return newX
 
     def feedforward(self, x):
         a = x
         activations = [x]  # list to store all the activations, layer by layer
         zs = []  # list to store all the z vectors, layer by layer
         # (num_features, num_examples)
-        if self.isBinarized:
-            zipObj = zip(
-                self.binarize(self.weights),
-                self.binarize(self.biases),
-                self.activations,
-            )
-        else:
-            zipObj = zip(self.weights, self.biases, self.activations)
-        for w, b, afunc in zipObj:
+        for w, b, afunc in zip(self.weights, self.biases, self.activations):
             z = self.xp.dot(w, a) + b
             cp.cuda.Stream.null.synchronize()
             zs.append(z)
@@ -145,6 +144,11 @@ class Network(object):
         best_weights = [None for _ in self.layers]
         best_biases = best_weights[:]
         best_accuracy = -1.0
+
+        if self.isBinarized:
+            self.non_binarized_weights = [w.copy() for w in self.weights]
+            self.non_binarized_biases = [b.copy() for b in self.biases]
+            cp.cuda.Stream.null.synchronize()
 
         n = len(trainX)
         costList = []
@@ -206,14 +210,10 @@ class Network(object):
 
     def update_batch(self, batch, eta):
         x, y = batch
-
         m = x.shape[0] * 1.0
-
-        # if self.isBinarized:
-        #     self.weights = [self.binarize(w) for w in self.weights]
-        #     self.biases = [self.binarize(b) for b in self.biases]
-        #     cp.cuda.Stream.null.synchronize()
-
+        if self.isBinarized:
+            self.weights = [self.binarize(w) for w in self.non_binarized_weights]
+            self.biases = [self.binarize(b) for b in self.non_binarized_biases]
         delta_nabla_b, delta_nabla_w, cost = self.backprop(x.T, y.T)
         cp.cuda.Stream.null.synchronize()
         # matrix.sum(axis=0) => 3
@@ -231,17 +231,17 @@ class Network(object):
         nabla_b = [nb.mean(axis=1, keepdims=True) for nb in delta_nabla_b]
         nabla_w = [(nw / m) for nw in delta_nabla_w]
         cp.cuda.Stream.null.synchronize()
-        # old_weights = self.weights[:]
-        # old_biases = self.biases[:]
-        self.weights = [w - (eta * nw) for w, nw in zip(self.weights, nabla_w)]
-        self.biases = [b - (eta * nb) for b, nb in zip(self.biases, nabla_b)]
-
+        if self.isBinarized:
+            self.non_binarized_weights = [
+                w - (eta * nw) for w, nw in zip(self.non_binarized_weights, nabla_w)
+            ]
+            self.non_binarized_biases = [
+                b - (eta * nb) for b, nb in zip(self.non_binarized_biases, nabla_b)
+            ]
+        else:
+            self.weights = [w - (eta * nw) for w, nw in zip(self.weights, nabla_w)]
+            self.biases = [b - (eta * nb) for b, nb in zip(self.biases, nabla_b)]
         cp.cuda.Stream.null.synchronize()
-        # if self.isBinarized:
-        #     self.weights = [self.xp.clip(w, -1.0, 1.0) for w in self.weights]
-        #     self.biases = [self.xp.clip(b, -1.0, 1.0) for b in self.biases]
-        #     cp.cuda.Stream.null.synchronize()
-
         return cost
 
     def backprop(self, x, y):

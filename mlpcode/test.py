@@ -9,7 +9,7 @@ print("Loading {}".format(dataset))
 trainX, trainY, testX, testY = loadDataset(dataset)
 print("Finished loading {} data".format(dataset))
 layers = [784, 64, 10]
-epochs = 10
+epochs = 500
 print("Creating neural net")
 
 # Creating from scratch
@@ -19,7 +19,7 @@ nn = Network(
     hiddenAf=af.sign,
     outAf=af.softmax,
     lossF=lf.cross_entropy,
-    binarized=False,
+    binarized=True,
 )
 
 # Creating from a pretrained model
