@@ -2,9 +2,10 @@ import cupy as cp
 import numpy as np
 from pathlib import Path
 from datetime import datetime
+from typing import List
 
 from mlpcode.activation import ACTIVATION_DERIVATIVES, ACTIVATION_FUNCTIONS
-from mlpcode.activation import ActivationFuncs as af, hard_sigmoid
+from mlpcode.activation import ActivationFuncs as af, unitstep
 from mlpcode.loss import LOSS_DERIVATES, LOSS_FUNCS
 from mlpcode.loss import LossFuncs as lf
 from mlpcode.utils import MODELDIR, DATASETS
@@ -27,7 +28,9 @@ class Network(object):
         if lossF == lf.cross_entropy and outAf not in (af.sigmoid, af.softmax):
             # My implementation for normal derivative of cross entropy is not stable enough
             # Luckily, it comes down to (output - target) when used with sigmoid or softmax
-            raise ValueError("Gotta use sigmoid or softmax with cross entropy loss")
+            raise ValueError(
+                "Gotta use sigmoid or softmax with cross entropy loss"
+            )
 
         if useGpu:
             self.xp = cp
@@ -37,20 +40,24 @@ class Network(object):
         self.layers = layers
         self.isBinarized = binarized
         if self.isBinarized:
-            self.non_binarized_weights = None
-            self.non_binarized_biases = None
+            self.non_binarized_weights: List[np.ndarray] = []
+            self.non_binarized_biases: List[np.ndarray] = []
 
         if fineTuning:
-            self.weights, self.biases = None, None
+            self.weights, self.biases = [], []
         else:
             # Xavier init
             self.biases = [self.xp.random.randn(y, 1) for y in layers[1:]]
             self.weights = [
-                (self.xp.random.randn(l, l_minus_1) * self.xp.sqrt(1 / l_minus_1))
+                (
+                    self.xp.random.randn(l, l_minus_1)
+                    * self.xp.sqrt(1 / l_minus_1)
+                )
                 for l_minus_1, l in zip(layers[:-1], layers[1:])
             ]
 
         cp.cuda.Stream.null.synchronize()
+        self.lossF = lossF
         self.loss = LOSS_FUNCS[lossF]
         self.loss_derivative = LOSS_DERIVATES[lossF]
         self.hiddenDerivative = ACTIVATION_DERIVATIVES[hiddenAf]
@@ -98,22 +105,26 @@ class Network(object):
             keyArr = npzfile.files
             assert len(keyArr) == 3
             # Conversion done for the same reason allow_pickle is used above
-            nn.weights = [nn.xp.array(x, dtype=nn.xp.float) for x in npzfile[keyArr[0]]]
-            nn.biases = [nn.xp.array(x, dtype=nn.xp.float) for x in npzfile[keyArr[1]]]
+            nn.weights = [
+                nn.xp.array(x, dtype=nn.xp.float) for x in npzfile[keyArr[0]]
+            ]
+            nn.biases = [
+                nn.xp.array(x, dtype=nn.xp.float) for x in npzfile[keyArr[1]]
+            ]
             # Just to ensure consistency
             nn.layers = list(map(int, fp[keyArr[2]]))
             nn.num_layers = len(nn.layers) - 1
             hiddenActivationFunc = ACTIVATION_FUNCTIONS[hiddenAf]
             outputActivationFunc = ACTIVATION_FUNCTIONS[outAf]
-            nn.activations = [hiddenActivationFunc for _ in range(nn.num_layers - 1)]
+            nn.activations = [
+                hiddenActivationFunc for _ in range(nn.num_layers - 1)
+            ]
             nn.activations.append(outputActivationFunc)
         return nn
 
     @staticmethod
     def binarize(x):
-        newX = x.copy()
-        newX[x >= 0] = 1
-        newX[x < 0] = -1
+        newX = unitstep(x.copy())
         cp.cuda.Stream.null.synchronize()
         return newX
 
@@ -190,7 +201,13 @@ class Network(object):
             costList.append(cost)
             print(
                 "Epoch {0}:\t{1} Acc: {2} / {3} ({4:.05f}%)\t{5} Loss: {6:.02f}".format(
-                    j + 1, accType, correct, n_test, float(acc), accType, float(cost)
+                    j + 1,
+                    accType,
+                    correct,
+                    n_test,
+                    float(acc),
+                    accType,
+                    float(cost),
                 )
             )
 
@@ -212,7 +229,9 @@ class Network(object):
         x, y = batch
         m = x.shape[0] * 1.0
         if self.isBinarized:
-            self.weights = [self.binarize(w) for w in self.non_binarized_weights]
+            self.weights = [
+                self.binarize(w) for w in self.non_binarized_weights
+            ]
             self.biases = [self.binarize(b) for b in self.non_binarized_biases]
         delta_nabla_b, delta_nabla_w, cost = self.backprop(x.T, y.T)
         cp.cuda.Stream.null.synchronize()
@@ -233,14 +252,20 @@ class Network(object):
         cp.cuda.Stream.null.synchronize()
         if self.isBinarized:
             self.non_binarized_weights = [
-                w - (eta * nw) for w, nw in zip(self.non_binarized_weights, nabla_w)
+                w - (eta * nw)
+                for w, nw in zip(self.non_binarized_weights, nabla_w)
             ]
             self.non_binarized_biases = [
-                b - (eta * nb) for b, nb in zip(self.non_binarized_biases, nabla_b)
+                b - (eta * nb)
+                for b, nb in zip(self.non_binarized_biases, nabla_b)
             ]
         else:
-            self.weights = [w - (eta * nw) for w, nw in zip(self.weights, nabla_w)]
-            self.biases = [b - (eta * nb) for b, nb in zip(self.biases, nabla_b)]
+            self.weights = [
+                w - (eta * nw) for w, nw in zip(self.weights, nabla_w)
+            ]
+            self.biases = [
+                b - (eta * nb) for b, nb in zip(self.biases, nabla_b)
+            ]
         cp.cuda.Stream.null.synchronize()
         return cost
 
@@ -256,7 +281,9 @@ class Network(object):
         # backward pass
         dLdA = self.loss_derivative(activation, y)  # expected shape: k * n
         cp.cuda.Stream.null.synchronize()
-        if self.outAF in (af.softmax, af.identity):
+        if (self.outAF == af.identity) or (
+            self.outAF == af.softmax and self.lossF == lf.cross_entropy
+        ):
             delta = dLdA
         else:
             dAdZ = self.outputDerivative(dLdA, zs[-1])

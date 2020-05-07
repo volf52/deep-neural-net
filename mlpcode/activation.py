@@ -52,10 +52,8 @@ def softmax(x):
 
 
 def softmax_derivative(dA, z):
-    # a = softmax(z)
-    # return a * (1 - a)
-    # No need for it actually
-    return cp.get_array_module(z).ones_like(z)
+    a = softmax(z)
+    return a * (1 - a)
 
 
 def relu(x):
@@ -100,8 +98,8 @@ def unitstep(x):
 
 def hard_tanh(dA, z):
     # equivalent to max(-1, min(z, 1))
-    # return z.clip(-1, 1)
-    return 2 * hard_sigmoid(z) - 1
+    return z.clip(-1, 1)
+    # return 2 * hard_sigmoid(z) - 1
 
 
 class ActivationFuncs(Enum):

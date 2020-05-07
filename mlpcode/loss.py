@@ -11,6 +11,8 @@ def cross_entropy_loss(Y_hat, Y):
     m = Y_hat.shape[1]
     xp = cp.get_array_module(Y_hat)
 
+    Y_hat[Y_hat <= 1e-7] += 2.2251e-308
+
     L_sum = xp.sum(xp.multiply(Y, xp.log(Y_hat)))
     L = -(1.0 / m) * L_sum
     return L

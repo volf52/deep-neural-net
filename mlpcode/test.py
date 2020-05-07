@@ -8,18 +8,18 @@ dataset = DATASETS.mnist
 print("Loading {}".format(dataset))
 trainX, trainY, testX, testY = loadDataset(dataset)
 print("Finished loading {} data".format(dataset))
-layers = [784, 64, 10]
-epochs = 500
+layers = [784, 500, 1000, 10]
+epochs = 100
 print("Creating neural net")
 
 # Creating from scratch
 nn = Network(
     layers,
     useGpu=useGpu,
-    hiddenAf=af.sign,
+    hiddenAf=af.leaky_relu,
     outAf=af.softmax,
     lossF=lf.cross_entropy,
-    binarized=True,
+    binarized=False,
 )
 
 # Creating from a pretrained model
@@ -34,4 +34,4 @@ nn = Network(
 # )
 
 # Save must be the name of the dataset, if we want to save the model
-nn.train(trainX, trainY, epochs, batch_size=600, lr=1e-3, save=dataset)
+nn.train(trainX, trainY, epochs, batch_size=100, lr=0.07)
