@@ -175,7 +175,7 @@ class Network(object):
             accType = "Validation"
         # No need to keep this in hot vector encoded form
         if valY.shape[0] != valY.size:
-            valY = valY.argmax(axis=1)
+            valY = valY.argmax(axis=1).astype(np.uint8)
         valY = valY.reshape(1, -1)
         print("Starting training")
         for j in range(epochs):
