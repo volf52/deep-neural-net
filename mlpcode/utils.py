@@ -58,6 +58,8 @@ class DATASETS(Enum):
     mnistc_stripe = "mnist_c-stripe"
     mnistc_translate = "mnist_c-translate"
     mnistc_zigzag = "mnist_c-zigzag"
+    # cifar10 = "cifar-10"
+    # affnist = 'affNIST'
 
     def __repr__(self):
         return self.value
@@ -82,6 +84,9 @@ FASHION_MNIST_CLASSES = [
 
 def oneHotEncoding(classes: int, y):
     xp = cp.get_array_module(y)
+    if y.ndim > 1:
+        y = xp.squeeze(y)
+    assert y.ndim == 1
     return xp.eye(classes, dtype=xp.uint8)[y]
 
 
@@ -98,13 +103,17 @@ def loadIdxFile(
             magic, size = struct.unpack(">II", f.read(8))
             if magic != 2049:
                 raise ValueError(
-                    "Magic number mismatch for testing data. {} != 2049".format(magic)
+                    "Magic number mismatch for testing data. {} != 2049".format(
+                        magic
+                    )
                 )
         else:
             magic, size, rows, cols = struct.unpack(">IIII", f.read(16))
             if magic != 2051:
                 raise ValueError(
-                    "Magic number mismatch for testing data. {} != 2051".format(magic)
+                    "Magic number mismatch for testing data. {} != 2051".format(
+                        magic
+                    )
                 )
         data = xp.fromfile(f, dtype=xp.uint8)
 
@@ -117,24 +126,31 @@ def loadNpyFile(file_pth: Path, isTest, useGpu=True):
         xp = cp
     else:
         xp = np
-    with file_pth.open("rb") as f:
-        data = xp.load(f)
+    # with file_pth.open("rb") as f:
+    #     data = xp.load(f)
+    data = xp.load(file_pth).astype(np.uint8)
     return data
 
 
 def loadX(
-    file_pth: Path, loadFunc, num_instances: int, num_features: int, useGpu=True,
+    file_pth: Path,
+    loadFunc,
+    num_instances: int,
+    num_features: int,
+    useGpu=True,
 ):
     X = (
-        loadFunc(file_pth, False, useGpu)
-        .astype(np.float32)
-        .reshape(num_instances, num_features)
-    )
-    return X / 255.0
+        loadFunc(file_pth, False, useGpu).reshape(num_instances, num_features)
+        / 255.0
+    ).astype(np.float32)
+    # using inplace operator to not waste memory on copying and operating on a copy
+    # moved division with 255 above to avoid recasting problems
+    # X /= 255.0
+    return X
 
 
 def loadY(file_pth: Path, loadFunc, useGpu=True, encoded=True):
-    y = loadFunc(file_pth, True, useGpu)
+    y = loadFunc(file_pth, True, useGpu).astype(np.uint8)
     if encoded:
         y = oneHotEncoding(MNIST_CLASSES, y)
     else:
@@ -165,24 +181,26 @@ def loadTraining(dataDir: Path, useGpu=True, encoded=True):
     return X, y
 
 
-def loadNpyTesting(dataDir: Path, useGpu=True, encoded=True):
+def loadNpyTesting(
+    dataDir: Path, instances: int, inputNeurons: int, useGpu=True, encoded=True
+):
     xPth = dataDir / "test_images.npy"
     yPth = dataDir / "test_labels.npy"
     assert xPth.exists()
     assert yPth.exists()
-    instances = 10000
-    X = loadX(xPth, loadNpyFile, instances, 784, useGpu)
+    X = loadX(xPth, loadNpyFile, instances, inputNeurons, useGpu)
     y = loadY(yPth, loadNpyFile, useGpu, encoded)
     return X, y
 
 
-def loadNpyTraining(dataDir: Path, useGpu=True, encoded=True):
+def loadNpyTraining(
+    dataDir: Path, instances: int, inputNeurons: int, useGpu=True, encoded=True
+):
     xPth = dataDir / "train_images.npy"
     yPth = dataDir / "train_labels.npy"
     assert xPth.exists()
     assert yPth.exists()
-    instances = 60000
-    X = loadX(xPth, loadNpyFile, instances, 784, useGpu)
+    X = loadX(xPth, loadNpyFile, instances, inputNeurons, useGpu)
     y = loadY(yPth, loadNpyFile, useGpu, encoded)
     return X, y
 
@@ -196,8 +214,16 @@ def loadMnistC(category: DATASETS, useGpu=True, encoded=True):
     assert dirPth.exists()
     assert dirPth.is_dir()
 
-    trainX, trainY = loadNpyTraining(dirPth, useGpu, encoded)
-    testX, testY = loadNpyTesting(dirPth, useGpu, encoded)
+    trainInstances = 60000
+    testInstances = 10000
+    inputNeurons = 784
+
+    trainX, trainY = loadNpyTraining(
+        dirPth, trainInstances, inputNeurons, useGpu=useGpu, encoded=encoded
+    )
+    testX, testY = loadNpyTesting(
+        dirPth, testInstances, inputNeurons, useGpu=useGpu, encoded=encoded
+    )
     return trainX, trainY, testX, testY
 
 
@@ -213,7 +239,61 @@ def loadFashionMnist(useGpu=True, encoded=True):
     return trainX, trainY, testX, testY
 
 
-LOADING_FUNCS = {DATASETS.mnist: loadMnist, DATASETS.fashion: loadFashionMnist}
+def loadAffNist(useGpu=True, encoded=True):
+    root = DATADIR / "affnist"
+    prefix = "affNIST"
+    train_instances = 1600000
+    test_validation_instances = 320000
+    features = 1600
+    trainX = loadX(
+        root / f"{prefix}_trainX.npy",
+        loadNpyFile,
+        train_instances,
+        features,
+        useGpu,
+    )
+    trainY = loadY(root / f"{prefix}_trainY.npy", loadNpyFile, useGpu, encoded)
+    testX = loadX(
+        root / f"{prefix}_testX.npy",
+        loadNpyFile,
+        test_validation_instances,
+        features,
+        useGpu,
+    )
+    testY = loadY(root / f"{prefix}_testY.npy", loadNpyFile, useGpu, encoded)
+    return trainX, trainY, testX, testY
+
+
+def loadCifar10(useGpu=True, encoded=True):
+    root = DATADIR / "cifar-10"
+    prefix = "cifar-10_greyscale"
+    train_instances = 50000
+    test_validation_instances = 10000
+    features = 1024
+    trainX = loadX(
+        root / f"{prefix}_trainX.npy",
+        loadNpyFile,
+        train_instances,
+        features,
+        useGpu,
+    )
+    trainY = loadY(root / f"{prefix}_trainY.npy", loadNpyFile, useGpu, encoded)
+    testX = loadX(
+        root / f"{prefix}_testX.npy",
+        loadNpyFile,
+        test_validation_instances,
+        features,
+        useGpu,
+    )
+    testY = loadY(root / f"{prefix}_testY.npy", loadNpyFile, useGpu, encoded)
+    return trainX, trainY, testX, testY
+
+
+LOADING_FUNCS = {
+    DATASETS.mnist: loadMnist,
+    DATASETS.fashion: loadFashionMnist,
+    DATASETS.cifar10: loadCifar10,
+}
 
 
 def loadDataset(dataset: DATASETS, useGpu=True, encoded=True):
@@ -224,8 +304,9 @@ def loadDataset(dataset: DATASETS, useGpu=True, encoded=True):
 
 
 if __name__ == "__main__":
-    # trainX, trainY, testX, testY = loadDataset(DATASETS.fashion)
-    trainX, trainY, testX, testY = loadDataset(DATASETS.mnistc_identity)
+    # trainX, trainY, testX, testY = loadDataset(DATASETS.cifar10)
+    # trainX, trainY, testX, testY = loadAffNist(useGpu=False)
+    trainX, trainY, testX, testY = loadCifar10()
 
     print(trainX.shape)
     print(trainY.shape)
