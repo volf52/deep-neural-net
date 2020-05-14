@@ -58,7 +58,7 @@ class DATASETS(Enum):
     mnistc_stripe = "mnist_c-stripe"
     mnistc_translate = "mnist_c-translate"
     mnistc_zigzag = "mnist_c-zigzag"
-    # cifar10 = "cifar-10"
+    cifar10 = "cifar-10"
     # affnist = 'affNIST'
 
     def __repr__(self):
@@ -103,17 +103,13 @@ def loadIdxFile(
             magic, size = struct.unpack(">II", f.read(8))
             if magic != 2049:
                 raise ValueError(
-                    "Magic number mismatch for testing data. {} != 2049".format(
-                        magic
-                    )
+                    "Magic number mismatch for testing data. {} != 2049".format(magic)
                 )
         else:
             magic, size, rows, cols = struct.unpack(">IIII", f.read(16))
             if magic != 2051:
                 raise ValueError(
-                    "Magic number mismatch for testing data. {} != 2051".format(
-                        magic
-                    )
+                    "Magic number mismatch for testing data. {} != 2051".format(magic)
                 )
         data = xp.fromfile(f, dtype=xp.uint8)
 
@@ -128,24 +124,21 @@ def loadNpyFile(file_pth: Path, isTest, useGpu=True):
         xp = np
     # with file_pth.open("rb") as f:
     #     data = xp.load(f)
-    data = xp.load(file_pth).astype(np.uint8)
+    data = xp.load(file_pth)
+    cp.cuda.Stream.null.synchronize()
     return data
 
 
 def loadX(
-    file_pth: Path,
-    loadFunc,
-    num_instances: int,
-    num_features: int,
-    useGpu=True,
+    file_pth: Path, loadFunc, num_instances: int, num_features: int, useGpu=True,
 ):
     X = (
-        loadFunc(file_pth, False, useGpu).reshape(num_instances, num_features)
-        / 255.0
+        loadFunc(file_pth, False, useGpu).reshape(num_instances, num_features) / 255.0
     ).astype(np.float32)
     # using inplace operator to not waste memory on copying and operating on a copy
     # moved division with 255 above to avoid recasting problems
     # X /= 255.0
+    cp.cuda.Stream.null.synchronize()
     return X
 
 
@@ -156,6 +149,7 @@ def loadY(file_pth: Path, loadFunc, useGpu=True, encoded=True):
     else:
         y = y.reshape(-1, 1)
 
+    cp.cuda.Stream.null.synchronize()
     return y
 
 
@@ -246,11 +240,7 @@ def loadAffNist(useGpu=True, encoded=True):
     test_validation_instances = 320000
     features = 1600
     trainX = loadX(
-        root / f"{prefix}_trainX.npy",
-        loadNpyFile,
-        train_instances,
-        features,
-        useGpu,
+        root / f"{prefix}_trainX.npy", loadNpyFile, train_instances, features, useGpu,
     )
     trainY = loadY(root / f"{prefix}_trainY.npy", loadNpyFile, useGpu, encoded)
     testX = loadX(
@@ -271,11 +261,7 @@ def loadCifar10(useGpu=True, encoded=True):
     test_validation_instances = 10000
     features = 1024
     trainX = loadX(
-        root / f"{prefix}_trainX.npy",
-        loadNpyFile,
-        train_instances,
-        features,
-        useGpu,
+        root / f"{prefix}_trainX.npy", loadNpyFile, train_instances, features, useGpu,
     )
     trainY = loadY(root / f"{prefix}_trainY.npy", loadNpyFile, useGpu, encoded)
     testX = loadX(
@@ -308,7 +294,7 @@ if __name__ == "__main__":
     # trainX, trainY, testX, testY = loadAffNist(useGpu=False)
     trainX, trainY, testX, testY = loadCifar10()
 
-    print(trainX.shape)
-    print(trainY.shape)
-    print(testX.shape)
-    print(testY.shape)
+    print((trainX.shape, trainX.dtype))
+    print((trainY.shape, trainY.dtype))
+    print((testX.shape, testX.dtype))
+    print((testY.shape, testY.dtype))
