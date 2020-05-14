@@ -87,7 +87,7 @@ def oneHotEncoding(classes: int, y):
     if y.ndim > 1:
         y = xp.squeeze(y)
     assert y.ndim == 1
-    return xp.eye(classes, dtype=xp.uint8)[y]
+    return xp.eye(classes, dtype=np.uint8)[y]
 
 
 def loadIdxFile(
@@ -97,7 +97,6 @@ def loadIdxFile(
         xp = cp
     else:
         xp = np
-
     with file_pth.open("rb") as f:
         if isTest:
             magic, size = struct.unpack(">II", f.read(8))
@@ -111,7 +110,7 @@ def loadIdxFile(
                 raise ValueError(
                     "Magic number mismatch for testing data. {} != 2051".format(magic)
                 )
-        data = xp.fromfile(f, dtype=xp.uint8)
+        data = xp.fromfile(f, dtype=np.uint8)
 
     return data
 
@@ -124,7 +123,8 @@ def loadNpyFile(file_pth: Path, isTest, useGpu=True):
         xp = np
     # with file_pth.open("rb") as f:
     #     data = xp.load(f)
-    data = xp.load(file_pth)
+    dt = np.uint8 if isTest else np.float32
+    data = xp.load(file_pth).astype(dt)
     cp.cuda.Stream.null.synchronize()
     return data
 
@@ -133,8 +133,11 @@ def loadX(
     file_pth: Path, loadFunc, num_instances: int, num_features: int, useGpu=True,
 ):
     X = (
-        loadFunc(file_pth, False, useGpu).reshape(num_instances, num_features) / 255.0
-    ).astype(np.float32)
+        loadFunc(file_pth, False, useGpu)
+        .reshape(num_instances, num_features)
+        .astype(np.float32)
+    )
+    X /= 255.0
     # using inplace operator to not waste memory on copying and operating on a copy
     # moved division with 255 above to avoid recasting problems
     # X /= 255.0
@@ -286,7 +289,8 @@ def loadDataset(dataset: DATASETS, useGpu=True, encoded=True):
     if str(dataset).startswith("mnist_c"):
         return loadMnistC(dataset)
     else:
-        return LOADING_FUNCS[dataset](useGpu, encoded)
+        loadFunc = LOADING_FUNCS[dataset]
+        return loadFunc(useGpu, encoded)
 
 
 if __name__ == "__main__":
