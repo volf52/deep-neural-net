@@ -287,7 +287,7 @@ LOADING_FUNCS = {
 
 def loadDataset(dataset: DATASETS, useGpu=True, encoded=True):
     if str(dataset).startswith("mnist_c"):
-        return loadMnistC(dataset)
+        return loadMnistC(dataset, useGpu=useGpu, encoded=encoded)
     else:
         loadFunc = LOADING_FUNCS[dataset]
         return loadFunc(useGpu, encoded)
