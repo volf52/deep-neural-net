@@ -202,8 +202,11 @@ class Network(object):
 
             if save is not None and acc > best_accuracy:
                 best_accuracy = acc
-                best_weights = [w.copy() for w in self.weights]
-                best_biases = [b.copy() for b in self.biases]
+                # makes no sense to save the binarized weights if we need the non_binarized for finetuning
+                ws = self.non_binarized_weights if self.isBinarized else self.weights
+                bs = self.non_binarized_biases if self.isBinarized else self.biases
+                best_weights = [w.copy() for w in ws]
+                best_biases = [b.copy() for b in bs]
 
         if save is not None:
             print("\nBest Accuracy:\t{0:.03f}%".format(float(best_accuracy)))
@@ -252,8 +255,8 @@ class Network(object):
         return cost
 
     def backprop(self, x, y):
-        nabla_b = [None for b in self.biases]
-        nabla_w = [None for w in self.weights]
+        nabla_b = [None for _ in self.biases]
+        nabla_w = [None for _ in self.weights]
 
         # forward pass
         zs, activations, activation = self.feedforward(x)
