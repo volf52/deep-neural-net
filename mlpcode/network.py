@@ -126,28 +126,18 @@ class Network(object):
         cp.cuda.Stream.null.synchronize()
         return newX
 
-    def feedforward(self, x):
-        a = x
-        activations = [x]  # list to store all the activations, layer by layer
-        zs = []  # list to store all the z vectors, layer by layer
-        # (num_features, num_examples)
-        for w, b, afunc in zip(self.weights, self.biases, self.activations):
-            z = self.xp.dot(w, a) + b
-            cp.cuda.Stream.null.synchronize()
-            zs.append(z)
-            a = afunc(z)
-            activations.append(a)
-        return zs, activations, a
+    # def compile(self, lr=1e-3, ):
 
     def train(
         self,
-        trainX: np.array,
-        trainY: np.array,
+        trainX: np.ndarray,
+        trainY: np.ndarray,
         epochs: int,
         batch_size=1,
         lr=1e-3,
-        valX=None,
-        valY=None,
+        shuffle=True,
+        valX: np.ndarray = None,
+        valY: np.ndarray = None,
         save: DATASETS = None,
     ):
         best_weights = [None for _ in self.layers]
@@ -177,21 +167,20 @@ class Network(object):
         valY = valY.reshape(1, -1)
         print("Starting training")
         for j in range(epochs):
-            # random shuffling
-            p = self.xp.random.permutation(n)
             epochCost = []
-            trainX = trainX[p, :]
-            trainY = trainY[p, :]
 
-            batches = [
-                (trainX[k : k + batch_size, :], trainY[k : k + batch_size, :],)
-                for k in range(0, n, batch_size)
-            ]
+            # random shuffling
+            if shuffle:
+                p = self.xp.random.permutation(n)
+                trainX = trainX[p, :]
+                trainY = trainY[p, :]
+
+            batches = self.get_batches(trainX, trainY, batch_size, n)
             for batch in batches:
                 batchCost = self.update_batch(batch, lr)
                 epochCost.append(batchCost)
 
-            correct = self.get_accuracy(valX, valY)
+            correct = self.evaluate(valX, valY)
             cp.cuda.Stream.null.synchronize()
             acc = correct * 100.0 / n_test
             cost = self.xp.array(epochCost).mean()
@@ -213,15 +202,11 @@ class Network(object):
 
         if save is not None:
             print("\nBest Accuracy:\t{0:.03f}%".format(float(best_accuracy)))
-            fName = f"{str(save)}_{datetime.utcnow().timestamp()}"
-            filePth = MODELDIR / fName
-            best_weights = [cp.asnumpy(w) for w in best_weights]
-            best_biases = [cp.asnumpy(b) for b in best_biases]
-            print(f"Saving model to {filePth}.npz")
-            self.xp.savez(filePth, best_weights, best_biases, self.layers)
+            self.save_weights(save, (best_weights, best_biases))
+
         return costList, accList
 
-    def update_batch(self, batch, eta):
+    def update_batch(self, batch, lr):
         x, y = batch
         m = x.shape[0] * 1.0
         if self.isBinarized:
@@ -246,14 +231,14 @@ class Network(object):
         cp.cuda.Stream.null.synchronize()
         if self.isBinarized:
             self.non_binarized_weights = [
-                w - (eta * nw) for w, nw in zip(self.non_binarized_weights, nabla_w)
+                w - (lr * nw) for w, nw in zip(self.non_binarized_weights, nabla_w)
             ]
             self.non_binarized_biases = [
-                b - (eta * nb) for b, nb in zip(self.non_binarized_biases, nabla_b)
+                b - (lr * nb) for b, nb in zip(self.non_binarized_biases, nabla_b)
             ]
         else:
-            self.weights = [w - (eta * nw) for w, nw in zip(self.weights, nabla_w)]
-            self.biases = [b - (eta * nb) for b, nb in zip(self.biases, nabla_b)]
+            self.weights = [w - (lr * nw) for w, nw in zip(self.weights, nabla_w)]
+            self.biases = [b - (lr * nb) for b, nb in zip(self.biases, nabla_b)]
         cp.cuda.Stream.null.synchronize()
         return cost
 
@@ -262,7 +247,7 @@ class Network(object):
         nabla_w = [None for _ in self.weights]
 
         # forward pass
-        zs, activations, activation = self.feedforward(x)
+        zs, activations, activation = self.forwardpass(x)
 
         # Mean cost of whole batch
         cost = self.loss(activation, y).mean()
@@ -291,11 +276,58 @@ class Network(object):
             cp.cuda.Stream.null.synchronize()
         return (nabla_b, nabla_w, cost)
 
-    def get_accuracy(self, X, y):
+    def forwardpass(self, x):
+        a = x
+        activations = [x]  # list to store all the activations, layer by layer
+        zs = []  # list to store all the z vectors, layer by layer
+        # (num_features, num_examples)
+        for w, b, afunc in zip(self.weights, self.biases, self.activations):
+            z = self.xp.dot(w, a) + b
+            cp.cuda.Stream.null.synchronize()
+            zs.append(z)
+            a = afunc(z)
+            activations.append(a)
+        return zs, activations, a
+
+    def predict(self, X):
+        _, _, yhat = self.forwardpass(X)
+        cp.cuda.Stream.null.synchronize()
+        preds = yhat.argmax(axis=0)
+        return preds
+
+    def evaluate(self, X, y, batch_size=1):
         # testY should NOT be one hot encoded for this to work
         # The code at the start of training takes care of it if testY was one-hot encoded
         # when passed into the train func
-        _, _, y_hat = self.feedforward(X)
-        cp.cuda.Stream.null.synchronize()
-        preds = y_hat.argmax(axis=0).reshape(1, -1)
-        return (y == preds).sum()
+        batches = self.get_batches(X, y, batch_size, X.shape[1])
+        correct = 0
+        for batchX, batchY in batches:
+            preds = self.predict(batchX).reshape(1, -1)
+            batch_correct = (batchY == preds).sum()
+            correct += batch_correct
+        return correct
+
+    def save_weights(self, datasetName: DATASETS, best=None):
+        fName = f"{str(datasetName)}_{datetime.utcnow().timestamp()}"
+        filePth = MODELDIR / fName
+        if best is None:
+            weights = self.weights
+            biases = self.biases
+        else:
+            weights, biases = best
+
+        weights_to_save = [cp.asnumpy(w) for w in weights]
+        biases_to_save = [cp.asnumpy(b) for b in biases]
+        print(f"Saving model to {filePth}.npz")
+        self.xp.savez(filePth, weights_to_save, biases_to_save, self.layers)
+
+    @staticmethod
+    def get_batches(X, y, batch_size, n):
+        if batch_size == 1:
+            batches = [(X, y)]
+        else:
+            batches = [
+                (X[k : k + batch_size, :], y[k : k + batch_size, :],)
+                for k in range(0, n, batch_size)
+            ]
+        return batches
