@@ -5,7 +5,8 @@ import cupy as cp
 
 RELU_EPSILON = 0.01
 
-# Add support for inplace derivatives
+# TODO Add support for inplace derivatives
+# TODO Cast to proper datatypes to lower memory footprint
 
 
 def identity(x):

@@ -7,15 +7,15 @@ from enum import Enum
 # The expected dimensions are k * m, where k in no of neurons in the output, and m is the batchsize
 
 # https://github.com/scikit-learn/scikit-learn/blob/95d4f0841/sklearn/metrics/_classification.py#L2176
-def cross_entropy_loss(Y_hat, Y):
+def cross_entropy_loss(yhat, y, eps=1e-15):
     # TODO: Implement fix for Y_hat == 0 when using binarized network
-    m = Y_hat.shape[1]
-    xp = cp.get_array_module(Y_hat)
+    m = yhat.shape[1]
+    xp = cp.get_array_module(yhat)
 
-    Y_hat[Y_hat <= 1e-7] += 2.2251e-308
+    xp.clip(yhat, eps, 1 - eps, out=yhat)
+    # yhat[yhat <= 1e-7] += xp.finfo(yhat.dtype).epsneg
 
-    L_sum = xp.sum(xp.multiply(Y, xp.log(Y_hat)))
-    L = -(1.0 / m) * L_sum
+    L = -(y * xp.log(yhat)).sum() / m
     return L
 
 

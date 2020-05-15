@@ -119,7 +119,10 @@ class Network(object):
 
     @staticmethod
     def binarize(x):
-        newX = unitstep(x.copy())
+        xp = cp.get_array_module(x)
+        newX = xp.empty_like(x, dtype=np.int8)
+        newX[x >= 0] = 1
+        newX[x < 0] = -1
         cp.cuda.Stream.null.synchronize()
         return newX
 
