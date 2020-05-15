@@ -2,33 +2,20 @@ import cupy as cp
 import numpy as np
 from pathlib import Path
 from datetime import datetime
-from typing import List
+from typing import List, Union
 
 from mlpcode.activation import ACTIVATION_DERIVATIVES, ACTIVATION_FUNCTIONS
 from mlpcode.activation import ActivationFuncs as af, unitstep
 from mlpcode.loss import LOSS_DERIVATES, LOSS_FUNCS
 from mlpcode.loss import LossFuncs as lf
 from mlpcode.utils import MODELDIR, DATASETS
+from mlpcode.optim import LRSchedulerStrat, LRScheduler
 
 
 class Network(object):
     def __init__(
-        self,
-        layers,
-        useGpu=False,
-        fineTuning=False,
-        binarized=False,
-        hiddenAf: af = af.sigmoid,
-        outAf: af = af.sigmoid,
-        lossF: lf = lf.mse,
+        self, layers: List[int], useGpu=False, fineTuning=False, binarized=False,
     ):
-        assert hiddenAf in ACTIVATION_FUNCTIONS
-        assert outAf in ACTIVATION_FUNCTIONS
-        assert lossF in LOSS_FUNCS
-        if lossF == lf.cross_entropy and outAf not in (af.sigmoid, af.softmax):
-            # My implementation for normal derivative of cross entropy is not stable enough
-            # Luckily, it comes down to (output - target) when used with sigmoid or softmax
-            raise ValueError("Gotta use sigmoid or softmax with cross entropy loss")
 
         if useGpu:
             self.xp = cp
@@ -56,44 +43,29 @@ class Network(object):
                 ).astype(np.float32)
                 for l_minus_1, l in zip(layers[:-1], layers[1:])
             ]
-
         cp.cuda.Stream.null.synchronize()
-        self.lossF = lossF
-        self.loss = LOSS_FUNCS[lossF]
-        self.loss_derivative = LOSS_DERIVATES[lossF]
-        self.hiddenDerivative = ACTIVATION_DERIVATIVES[hiddenAf]
-        self.outAF = outAf
-        self.outputDerivative = ACTIVATION_DERIVATIVES[outAf]
-        if not fineTuning:
-            # Not counting input layer
-            self.num_layers = len(layers) - 1
-            hiddenActivationFunc = ACTIVATION_FUNCTIONS[hiddenAf]
-            outputActivationFunc = ACTIVATION_FUNCTIONS[outAf]
-            self.activations = [
-                hiddenActivationFunc for _ in range(self.num_layers - 1)
-            ]
-            self.activations.append(outputActivationFunc)
-            assert len(self.activations) == self.num_layers  # len(layers)
+
+        self.lossF = None
+        self.loss = None
+        self.loss_derivative = None
+        self.hiddenDerivative = None
+        self.outAF = None
+        self.outputDerivative = None
+        self.activations = None
+        self.__lr: LRScheduler = None
+        self.num_layers = len(layers) - 1
+        self.__isCompiled = False
+
+    @property
+    def isCompiled(self) -> bool:
+        return self.__isCompiled
 
     @staticmethod
     def fromModel(
-        filePth: Path,
-        useGpu=False,
-        binarized=False,
-        hiddenAf: af = af.sigmoid,
-        outAf: af = af.sigmoid,
-        lossF: lf = lf.mse,
+        filePth: Path, useGpu=False, binarized=False,
     ):
         assert filePth.exists()
-        nn = Network(
-            [],
-            useGpu=useGpu,
-            hiddenAf=hiddenAf,
-            outAf=outAf,
-            lossF=lossF,
-            fineTuning=True,
-            binarized=binarized,
-        )
+        nn = Network([], useGpu=useGpu, fineTuning=True, binarized=binarized,)
         # If the file was saved using cupy, it would convert the weights (and biases)
         # list to an object array, so allow_pickle and subsequent conversion is for that
         with nn.xp.load(filePth, allow_pickle=True) as fp:
@@ -111,10 +83,6 @@ class Network(object):
             # Just to ensure consistency
             nn.layers = list(map(int, fp[keyArr[2]]))
             nn.num_layers = len(nn.layers) - 1
-            hiddenActivationFunc = ACTIVATION_FUNCTIONS[hiddenAf]
-            outputActivationFunc = ACTIVATION_FUNCTIONS[outAf]
-            nn.activations = [hiddenActivationFunc for _ in range(nn.num_layers - 1)]
-            nn.activations.append(outputActivationFunc)
         return nn
 
     @staticmethod
@@ -126,7 +94,44 @@ class Network(object):
         cp.cuda.Stream.null.synchronize()
         return newX
 
-    # def compile(self, lr=1e-3, ):
+    def compile(
+        self,
+        lr: Union[LRScheduler, float] = 1e-3,
+        hiddenAf: af = af.sigmoid,
+        outAf: af = af.sigmoid,
+        lossF: lf = lf.mse,
+    ):
+        assert hiddenAf in ACTIVATION_FUNCTIONS
+        assert outAf in ACTIVATION_FUNCTIONS
+        assert lossF in LOSS_FUNCS
+        if lossF == lf.cross_entropy and outAf not in (af.sigmoid, af.softmax):
+            # My implementation for normal derivative of cross entropy is not stable enough
+            # Luckily, it comes down to (output - target) when used with sigmoid or softmax
+            raise ValueError("Gotta use sigmoid or softmax with cross entropy loss")
+
+        self.__lossF = lossF
+        self.loss = LOSS_FUNCS[lossF]
+        self.loss_derivative = LOSS_DERIVATES[lossF]
+        self.hiddenDerivative = ACTIVATION_DERIVATIVES[hiddenAf]
+        self.outAF = outAf
+        self.outputDerivative = ACTIVATION_DERIVATIVES[outAf]
+
+        hiddenActivationFunc = ACTIVATION_FUNCTIONS[hiddenAf]
+        outputActivationFunc = ACTIVATION_FUNCTIONS[outAf]
+        self.activations = [hiddenActivationFunc for _ in range(self.num_layers - 1)]
+        self.activations.append(outputActivationFunc)
+        assert len(self.activations) == self.num_layers  # len(layers)
+
+        if isinstance(lr, float):
+            self.__lr = LRScheduler(alpha=lr)
+        elif isinstance(lr, LRScheduler):
+            self.__lr = lr
+        else:
+            raise ValueError(
+                "Invalid value for learning rate (only float or LRScheduler allowed)"
+            )
+
+        self.__isCompiled = True
 
     def train(
         self,
@@ -134,12 +139,15 @@ class Network(object):
         trainY: np.ndarray,
         epochs: int,
         batch_size=1,
-        lr=1e-3,
         shuffle=True,
         valX: np.ndarray = None,
         valY: np.ndarray = None,
         save: DATASETS = None,
     ):
+        if not self.__isCompiled:
+            print("\nEXCEPTION: Must compile the model before running train")
+            return
+
         best_weights = [None for _ in self.layers]
         best_biases = best_weights[:]
         best_accuracy = -1.0
@@ -177,8 +185,12 @@ class Network(object):
 
             batches = self.get_batches(trainX, trainY, batch_size, n)
             for batch in batches:
-                batchCost = self.update_batch(batch, lr)
+                batchCost = self.update_batch(batch, self.__lr.value)
                 epochCost.append(batchCost)
+
+            # The step could be moved inside the loop above
+            # Decay rate is meant to be done once per epoch, but that could very well work for each batch
+            self.__lr.step()
 
             correct = self.evaluate(valX, valY)
             cp.cuda.Stream.null.synchronize()
@@ -255,7 +267,7 @@ class Network(object):
         dLdA = self.loss_derivative(activation, y)  # expected shape: k * n
         cp.cuda.Stream.null.synchronize()
         if (self.outAF == af.identity) or (
-            self.outAF == af.softmax and self.lossF == lf.cross_entropy
+            self.outAF == af.softmax and self.__lossF == lf.cross_entropy
         ):
             delta = dLdA
         else:
