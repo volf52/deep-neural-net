@@ -14,7 +14,7 @@ layers = [trainX.shape[1], 512, 10]
 epochs = 10
 batchSize = 600
 # lr = 0.07
-lr = LRScheduler(alpha=0.07, decay_rate=2, strategy=LRS.drop)
+lr = LRScheduler(alpha=0.07, decay_rate=0.8, strategy=LRS.time)
 print("Creating neural net")
 
 # Creating from scratch
