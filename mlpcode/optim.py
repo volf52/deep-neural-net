@@ -30,16 +30,16 @@ class LRScheduler:
             self.decayRate = decay_rate
 
         assert decay_rate >= 0.0
-        self._alpha0 = alpha
+        self.__alpha0 = alpha
         self.strategy = strategy
-        self.stepCount = 0
-        self._alpha = alpha
-        self.dropEveryN = drop_every_n
+        self.__stepCount = 0
+        self.__alpha = alpha
+        self.__dropEveryN = drop_every_n
         self.step()
 
     @property
     def value(self):
-        return self._alpha
+        return self.__alpha
 
     @staticmethod
     def get_default_decay_rate(strategy: LRSchedulerStrat):
@@ -56,14 +56,14 @@ class LRScheduler:
 
     def step(self):
         if self.strategy == LRSchedulerStrat.na:
-            self._alpha = self._alpha0
+            self.__alpha = self.__alpha0
         elif self.strategy == LRSchedulerStrat.time:
-            self._alpha = 1.0 / (1 + self.decayRate * self.stepCount) * self._alpha0
+            self.__alpha = 1.0 / (1 + self.decayRate * self.__stepCount) * self.__alpha0
         elif self.strategy == LRSchedulerStrat.exp:
-            self._alpha = self._alpha0 * (self.decayRate ** self.stepCount)
+            self.__alpha = self.__alpha0 * (self.decayRate ** self.__stepCount)
         elif self.strategy == LRSchedulerStrat.drop:
-            if (self.stepCount + 1) % self.dropEveryN == 0:
-                self._alpha = self._alpha0 / self.decayRate
+            if (self.__stepCount + 1) % self.__dropEveryN == 0:
+                self.__alpha = self.__alpha0 / self.decayRate
         else:
             raise ValueError()
-        self.stepCount += 1
+        self.__stepCount += 1

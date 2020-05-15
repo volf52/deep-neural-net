@@ -45,13 +45,13 @@ class Network(object):
             ]
         cp.cuda.Stream.null.synchronize()
 
-        self.lossF = None
-        self.loss = None
-        self.loss_derivative = None
-        self.hiddenDerivative = None
-        self.outAF = None
-        self.outputDerivative = None
-        self.activations = None
+        self.__lossF = None
+        self.__loss = None
+        self.__loss_derivative = None
+        self.__hiddenDerivative = None
+        self.__outAF = None
+        self.__outputDerivative = None
+        self.__activations = None
         self.__lr: LRScheduler = None
         self.num_layers = len(layers) - 1
         self.__isCompiled = False
@@ -110,17 +110,17 @@ class Network(object):
             raise ValueError("Gotta use sigmoid or softmax with cross entropy loss")
 
         self.__lossF = lossF
-        self.loss = LOSS_FUNCS[lossF]
-        self.loss_derivative = LOSS_DERIVATES[lossF]
-        self.hiddenDerivative = ACTIVATION_DERIVATIVES[hiddenAf]
-        self.outAF = outAf
-        self.outputDerivative = ACTIVATION_DERIVATIVES[outAf]
+        self.__loss = LOSS_FUNCS[lossF]
+        self.__loss_derivative = LOSS_DERIVATES[lossF]
+        self.__hiddenDerivative = ACTIVATION_DERIVATIVES[hiddenAf]
+        self.__outAF = outAf
+        self.__outputDerivative = ACTIVATION_DERIVATIVES[outAf]
 
         hiddenActivationFunc = ACTIVATION_FUNCTIONS[hiddenAf]
         outputActivationFunc = ACTIVATION_FUNCTIONS[outAf]
-        self.activations = [hiddenActivationFunc for _ in range(self.num_layers - 1)]
-        self.activations.append(outputActivationFunc)
-        assert len(self.activations) == self.num_layers  # len(layers)
+        self.__activations = [hiddenActivationFunc for _ in range(self.num_layers - 1)]
+        self.__activations.append(outputActivationFunc)
+        assert len(self.__activations) == self.num_layers  # len(layers)
 
         if isinstance(lr, float):
             self.__lr = LRScheduler(alpha=lr)
@@ -262,16 +262,16 @@ class Network(object):
         zs, activations, activation = self.forwardpass(x)
 
         # Mean cost of whole batch
-        cost = self.loss(activation, y).mean()
+        cost = self.__loss(activation, y).mean()
         # backward pass
-        dLdA = self.loss_derivative(activation, y)  # expected shape: k * n
+        dLdA = self.__loss_derivative(activation, y)  # expected shape: k * n
         cp.cuda.Stream.null.synchronize()
-        if (self.outAF == af.identity) or (
-            self.outAF == af.softmax and self.__lossF == lf.cross_entropy
+        if (self.__outAF == af.identity) or (
+            self.__outAF == af.softmax and self.__lossF == lf.cross_entropy
         ):
             delta = dLdA
         else:
-            dAdZ = self.outputDerivative(dLdA, zs[-1])
+            dAdZ = self.__outputDerivative(dLdA, zs[-1])
             delta = dLdA * dAdZ
         nabla_b[-1] = delta
         nabla_w[-1] = self.xp.dot(delta, activations[-2].T)
@@ -281,7 +281,7 @@ class Network(object):
             z = zs[-l]
             dAprev = self.xp.dot(self.weights[-l + 1].T, delta)
             cp.cuda.Stream.null.synchronize()
-            delta = dAprev * self.hiddenDerivative(dAprev, z)
+            delta = dAprev * self.__hiddenDerivative(dAprev, z)
             cp.cuda.Stream.null.synchronize()
             nabla_b[-l] = delta
             nabla_w[-l] = self.xp.dot(delta, activations[-l - 1].T)
@@ -293,7 +293,7 @@ class Network(object):
         activations = [x]  # list to store all the activations, layer by layer
         zs = []  # list to store all the z vectors, layer by layer
         # (num_features, num_examples)
-        for w, b, afunc in zip(self.weights, self.biases, self.activations):
+        for w, b, afunc in zip(self.weights, self.biases, self.__activations):
             z = self.xp.dot(w, a) + b
             cp.cuda.Stream.null.synchronize()
             zs.append(z)
