@@ -156,14 +156,14 @@ def loadY(file_pth: Path, loadFunc, useGpu=True, encoded=True):
     return y
 
 
-def loadTesting(dataDir: Path, useGpu=True, encoded=True):
+def loadTesting(dataDir: Path, useGpu=True):
     xPth: Path = dataDir / "t10k-images-idx3-ubyte"
     yPth: Path = dataDir / "t10k-labels-idx1-ubyte"
     assert xPth.exists()
     assert yPth.exists()
     instances = 10000
-    X = loadX(xPth, loadIdxFile, instances, 784, useGpu)
-    y = loadY(yPth, loadIdxFile, useGpu, encoded)
+    X = loadX(xPth, loadIdxFile, instances, 784, useGpu=useGpu)
+    y = loadY(yPth, loadIdxFile, useGpu=useGpu, encoded=False)
     return X, y
 
 
@@ -173,20 +173,18 @@ def loadTraining(dataDir: Path, useGpu=True, encoded=True):
     assert xPth.exists()
     assert yPth.exists()
     instances = 60000
-    X = loadX(xPth, loadIdxFile, instances, 784, useGpu)
-    y = loadY(yPth, loadIdxFile, useGpu, encoded)
+    X = loadX(xPth, loadIdxFile, instances, 784, useGpu=useGpu)
+    y = loadY(yPth, loadIdxFile, useGpu=useGpu, encoded=encoded)
     return X, y
 
 
-def loadNpyTesting(
-    dataDir: Path, instances: int, inputNeurons: int, useGpu=True, encoded=True
-):
+def loadNpyTesting(dataDir: Path, instances: int, inputNeurons: int, useGpu=True):
     xPth = dataDir / "test_images.npy"
     yPth = dataDir / "test_labels.npy"
     assert xPth.exists()
     assert yPth.exists()
-    X = loadX(xPth, loadNpyFile, instances, inputNeurons, useGpu)
-    y = loadY(yPth, loadNpyFile, useGpu, encoded)
+    X = loadX(xPth, loadNpyFile, instances, inputNeurons, useGpu=useGpu)
+    y = loadY(yPth, loadNpyFile, useGpu=useGpu, encoded=False)
     return X, y
 
 
@@ -197,8 +195,8 @@ def loadNpyTraining(
     yPth = dataDir / "train_labels.npy"
     assert xPth.exists()
     assert yPth.exists()
-    X = loadX(xPth, loadNpyFile, instances, inputNeurons, useGpu)
-    y = loadY(yPth, loadNpyFile, useGpu, encoded)
+    X = loadX(xPth, loadNpyFile, instances, inputNeurons, useGpu=useGpu)
+    y = loadY(yPth, loadNpyFile, useGpu=useGpu, encoded=encoded)
     return X, y
 
 
@@ -218,21 +216,19 @@ def loadMnistC(category: DATASETS, useGpu=True, encoded=True):
     trainX, trainY = loadNpyTraining(
         dirPth, trainInstances, inputNeurons, useGpu=useGpu, encoded=encoded
     )
-    testX, testY = loadNpyTesting(
-        dirPth, testInstances, inputNeurons, useGpu=useGpu, encoded=encoded
-    )
+    testX, testY = loadNpyTesting(dirPth, testInstances, inputNeurons, useGpu=useGpu)
     return trainX, trainY, testX, testY
 
 
 def loadMnist(useGpu=True, encoded=True):
-    trainX, trainY = loadTraining(MNISTDIR, useGpu, encoded)
-    testX, testY = loadTesting(MNISTDIR, useGpu, encoded)
+    trainX, trainY = loadTraining(MNISTDIR, useGpu=useGpu, encoded=encoded)
+    testX, testY = loadTesting(MNISTDIR, useGpu=useGpu)
     return trainX, trainY, testX, testY
 
 
 def loadFashionMnist(useGpu=True, encoded=True):
-    trainX, trainY = loadTraining(FASHIONMNISTDIR, useGpu, encoded)
-    testX, testY = loadTesting(FASHIONMNISTDIR, useGpu, encoded)
+    trainX, trainY = loadTraining(FASHIONMNISTDIR, useGpu=useGpu, encoded=encoded)
+    testX, testY = loadTesting(FASHIONMNISTDIR, useGpu=useGpu)
     return trainX, trainY, testX, testY
 
 
@@ -243,17 +239,23 @@ def loadAffNist(useGpu=True, encoded=True):
     test_validation_instances = 320000
     features = 1600
     trainX = loadX(
-        root / f"{prefix}_trainX.npy", loadNpyFile, train_instances, features, useGpu,
+        root / f"{prefix}_trainX.npy",
+        loadNpyFile,
+        train_instances,
+        features,
+        useGpu=useGpu,
     )
-    trainY = loadY(root / f"{prefix}_trainY.npy", loadNpyFile, useGpu, encoded)
+    trainY = loadY(
+        root / f"{prefix}_trainY.npy", loadNpyFile, useGpu=useGpu, encoded=encoded
+    )
     testX = loadX(
         root / f"{prefix}_testX.npy",
         loadNpyFile,
         test_validation_instances,
         features,
-        useGpu,
+        useGpu=useGpu,
     )
-    testY = loadY(root / f"{prefix}_testY.npy", loadNpyFile, useGpu, encoded)
+    testY = loadY(root / f"{prefix}_testY.npy", loadNpyFile, useGpu=useGpu)
     return trainX, trainY, testX, testY
 
 
@@ -264,17 +266,23 @@ def loadCifar10(useGpu=True, encoded=True):
     test_validation_instances = 10000
     features = 1024
     trainX = loadX(
-        root / f"{prefix}_trainX.npy", loadNpyFile, train_instances, features, useGpu,
+        root / f"{prefix}_trainX.npy",
+        loadNpyFile,
+        train_instances,
+        features,
+        useGpu=useGpu,
     )
-    trainY = loadY(root / f"{prefix}_trainY.npy", loadNpyFile, useGpu, encoded)
+    trainY = loadY(
+        root / f"{prefix}_trainY.npy", loadNpyFile, useGpu=useGpu, encoded=encoded
+    )
     testX = loadX(
         root / f"{prefix}_testX.npy",
         loadNpyFile,
         test_validation_instances,
         features,
-        useGpu,
+        useGpu=useGpu,
     )
-    testY = loadY(root / f"{prefix}_testY.npy", loadNpyFile, useGpu, encoded)
+    testY = loadY(root / f"{prefix}_testY.npy", loadNpyFile, useGpu)
     return trainX, trainY, testX, testY
 
 
@@ -290,7 +298,7 @@ def loadDataset(dataset: DATASETS, useGpu=True, encoded=True):
         return loadMnistC(dataset, useGpu=useGpu, encoded=encoded)
     else:
         loadFunc = LOADING_FUNCS[dataset]
-        return loadFunc(useGpu, encoded)
+        return loadFunc(useGpu=useGpu, encoded=encoded)
 
 
 if __name__ == "__main__":

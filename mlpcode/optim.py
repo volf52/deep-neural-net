@@ -58,7 +58,9 @@ class LRScheduler:
         if self.strategy == LRSchedulerStrat.na:
             self.__alpha = self.__alpha0
         elif self.strategy == LRSchedulerStrat.time:
-            self.__alpha = 1.0 / (1 + self.__decayRate * self.__stepCount) * self.__alpha0
+            self.__alpha = (
+                1.0 / (1 + self.__decayRate * self.__stepCount) * self.__alpha0
+            )
         elif self.strategy == LRSchedulerStrat.exp:
             self.__alpha = self.__alpha0 * (self.__decayRate ** self.__stepCount)
         elif self.strategy == LRSchedulerStrat.drop:
