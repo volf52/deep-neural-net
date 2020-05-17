@@ -1,18 +1,17 @@
+import json
 import struct
+from enum import Enum
 from pathlib import Path
 
 import cupy as cp
 import numpy as np
-import struct
-import json
-from enum import Enum
 
 prnt = Path(__file__).parent
 
 # CONFIGURATION
 CONFIG_FILE = prnt / "nn.config.json"
 if CONFIG_FILE.exists():
-    print(f"Reading config from {CONFIG_FILE}")
+    # print(f"Reading config from {CONFIG_FILE}")
     with CONFIG_FILE.open("r") as f:
         tmp = json.load(f)
         config = {k: Path(tmp[k]) for k in tmp.keys()}
