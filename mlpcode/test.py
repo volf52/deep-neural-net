@@ -1,8 +1,7 @@
 from mlpcode.activation import ActivationFuncs as af
 from mlpcode.loss import LossFuncs as lf
 from mlpcode.network import Network
-from mlpcode.utils import DATASETS, loadDataset, MODELDIR
-from mlpcode.optim import LRScheduler, LRSchedulerStrat as LRS
+from mlpcode.utils import DATASETS, loadDataset
 
 useGpu = True
 binarized = True

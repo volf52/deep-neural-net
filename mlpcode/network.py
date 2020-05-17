@@ -1,15 +1,17 @@
-import cupy as cp
-import numpy as np
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
 from typing import List, Union
 
+import cupy as cp
+import numpy as np
+
 from mlpcode.activation import ACTIVATION_DERIVATIVES, ACTIVATION_FUNCTIONS
-from mlpcode.activation import ActivationFuncs as af, unitstep
+from mlpcode.activation import ActivationFuncs as af
 from mlpcode.loss import LOSS_DERIVATES, LOSS_FUNCS
 from mlpcode.loss import LossFuncs as lf
-from mlpcode.utils import MODELDIR
 from mlpcode.optim import LRScheduler
+from mlpcode.utils import MODELDIR
+
 
 # TODO: remove option for binarized on Network init. Move it only to training
 

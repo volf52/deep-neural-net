@@ -1,5 +1,4 @@
 import typer
-from pathlib import Path
 
 APP_NAME = "MLP CLI tool"
 

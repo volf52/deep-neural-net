@@ -2,7 +2,6 @@ from enum import Enum
 
 import cupy as cp
 
-
 RELU_EPSILON = 0.01
 
 # TODO Add support for inplace derivatives

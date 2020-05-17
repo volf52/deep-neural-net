@@ -1,6 +1,6 @@
-import cupy as cp
-
 from enum import Enum
+
+import cupy as cp
 
 
 # Y_hat is model output, and Y is the real label/output
