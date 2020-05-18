@@ -128,13 +128,14 @@ def quantize(x: np.ndarray, precision=32):
     x
         The array to quantize
     precision
-        The number of unique element in the mapped set after quantization
+        The number of bits to create the intervals in the mapped set after quantization
     """
 
     xp = cp.get_array_module(x)
-    xp.multiply(x, precision, out=x)
+    intervals = 2 ** precision
+    xp.multiply(x, intervals, out=x)
     xp.round_(x, out=x)
-    xp.divide(x, precision, out=x)
+    xp.divide(x, intervals, out=x)
 
 
 # TODO: Finish split_train_valid
@@ -656,7 +657,11 @@ LOADING_FUNCS = {
 
 
 def loadDataset(
-    dataset: DATASETS, useGpu=True, encoded=True, quant_precision: int = None
+    dataset: DATASETS,
+    useGpu=True,
+    encoded=True,
+    quant_precision: int = None,
+    quantize_test=True,
 ) -> TRAIN_TEST_DATA:
     """
     Loads a given dataset
@@ -670,7 +675,7 @@ def loadDataset(
     encoded
         Whether to one-hot encode the training labels (trainY)
     quant_precision
-        The precision for quantization
+        The precision (in bits) for quantization
 
     Returns
     -------
@@ -694,14 +699,15 @@ def loadDataset(
 
         trainX, trainY, testX, testY = data
         quantize(trainX, precision=quant_precision)
-        quantize(testX, precision=quant_precision)
+        if quantize_test:
+            quantize(testX, precision=quant_precision)
         data = (trainX, trainY, testX, testY)
 
     return data
 
 
 if __name__ == "__main__":
-    trainX, trainY, testX, testY = loadDataset(DATASETS.cifar10, quant_precision=32)
+    trainX, trainY, testX, testY = loadDataset(DATASETS.cifar10, quant_precision=2)
     # trainX, trainY, testX, testY = loadAffNist(useGpu=False)
 
     print((trainX.shape, trainX.dtype))
