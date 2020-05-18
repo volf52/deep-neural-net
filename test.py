@@ -3,14 +3,14 @@ from mlpcode.loss import LossFuncs as lf
 from mlpcode.network import Network
 from mlpcode.utils import DATASETS, loadDataset
 
-useGpu = True
+useGpu = False
 binarized = False
 dataset = DATASETS.fashion
 print("Loading {}".format(dataset))
-# trainX, trainY, testX, testY = loadDataset(dataset, useGpu=useGpu)
+trainX, trainY, testX, testY = loadDataset(dataset, useGpu=useGpu)
 # Set quant_precision to any integer > 1 to quantize the input,
 # The quantized input having quant_precision + 1 unique elements
-trainX, trainY, testX, testY = loadDataset(dataset, useGpu=useGpu, quant_precision=2)
+# trainX, trainY, testX, testY = loadDataset(dataset, useGpu=useGpu, quant_precision=2)
 print("Finished loading {} data".format(dataset))
 
 layers = [trainX.shape[1], 512, 10]
