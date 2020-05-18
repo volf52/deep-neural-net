@@ -4,7 +4,7 @@ from mlpcode.network import Network
 from mlpcode.utils import DATASETS, loadDataset
 
 useGpu = True
-binarized = True
+binarized = False
 dataset = DATASETS.mnist
 print("Loading {}".format(dataset))
 trainX, trainY, testX, testY = loadDataset(dataset, useGpu=useGpu)

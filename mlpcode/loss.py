@@ -8,30 +8,98 @@ import cupy as cp
 
 # https://github.com/scikit-learn/scikit-learn/blob/95d4f0841/sklearn/metrics/_classification.py#L2176
 def cross_entropy_loss(yhat, y, eps=1e-15):
-    # TODO: Implement fix for Y_hat == 0 when using binarized network
+    """
+    Cross-entropy loss. Must be called with output layer activation being sigmoid or softmax
+
+    Parameters
+    ----------
+    yhat
+        Numpy array with predicted labels, with shape (num_classes, num_instances) and dtype: float32
+    y
+        Numpy array with predicted labels, with shape (num_classes, num_instances) and dtype: uint8
+    eps
+        Tolerance for datapoints near zero (to prevent instability with log)
+
+    Returns
+    -------
+    ndarray
+        Scalar array containing the error/cost
+    """
+
     m = yhat.shape[1]
     xp = cp.get_array_module(yhat)
 
     xp.clip(yhat, eps, 1 - eps, out=yhat)
-    # yhat[yhat <= 1e-7] += xp.finfo(yhat.dtype).epsneg
 
     L = -(y * xp.log(yhat)).sum() / m
+
     return L
 
 
-def cross_entropy_derivative(Y_hat, Y):
+def cross_entropy_derivative(yhat, y):
+    """
+    Derivative for Mean Squared Error
+
+    Parameters
+    ----------
+    yhat
+        Numpy array with predicted labels, with shape (num_classes, num_instances) and dtype: float32
+    y
+        Numpy array with predicted labels, with shape (num_classes, num_instances) and dtype: uint8
+
+    Returns
+    -------
+    ndarray
+        The derivative of cross_entropy_loss(yhat, y) with shape(num_classes, num_instances)
+    """
+
     # xp = cp.get_array_module(Y_hat)
-    # return -(xp.divide(Y, Y_hat) - xp.divide(1 - Y, 1 - Y_hat))
-    return Y_hat - Y
+    # cost = -(xp.divide(Y, Y_hat) - xp.divide(1 - Y, 1 - Y_hat))
+    cost = yhat - y
+
+    return cost
 
 
-def mse(Y_hat, Y):
-    # Error is summed across the output neurons
-    return 0.5 * ((Y_hat - Y) ** 2).sum(axis=0)
+def mse(yhat, y):
+    """
+    Mean Squared Error
+
+    Parameters
+    ----------
+    yhat
+        Numpy array with predicted labels, with shape (num_classes, num_instances) and dtype: float32
+    y
+        Numpy array with predicted labels, with shape (num_classes, num_instances) and dtype: uint8
+
+    Returns
+    -------
+    ndarray
+        Scalar array containing the error/cost
+    """
+
+    cost = 0.5 * ((yhat - y) ** 2).sum(axis=0)
+
+    return cost
 
 
-def mse_derivative(Y_hat, Y):
-    return Y_hat - Y
+def mse_derivative(yhat, y):
+    """
+    Derivative for Mean Squared Error
+
+    Parameters
+    ----------
+    yhat
+        Numpy array with predicted labels, with shape (num_classes, num_instances) and dtype: float32
+    y
+        Numpy array with predicted labels, with shape (num_classes, num_instances) and dtype: uint8
+
+    Returns
+    -------
+    ndarray
+        The derivative of mse(yhat, y) with shape(num_classes, num_instances)
+    """
+
+    return yhat - y
 
 
 class LossFuncs(Enum):

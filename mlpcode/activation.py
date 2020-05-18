@@ -1,104 +1,122 @@
 from enum import Enum
 
 import cupy as cp
+from numpy import ndarray
 
 RELU_EPSILON = 0.01
 
-# TODO Add support for inplace derivatives
-# TODO Cast to proper datatypes to lower memory footprint
 
-
-def identity(x):
+def identity(x: ndarray):
     return x
 
 
-def identity_derivative(dA, z):
-    return cp.get_array_module(z).ones_like(z)
+def identity_derivative(z: ndarray):
+    x = cp.get_array_module(z).ones_like(z)
+    return x
 
 
-def sigmoid(x):
-    "x should be of the shape (n_features, n_samples)"
+def sigmoid(x: ndarray):
     # xp allows a generic interface for cpu/gpu code
     xp = cp.get_array_module(x)
-    return 1.0 / (1.0 + xp.exp(-x))
+    a = 1.0 / (1.0 + xp.exp(-x))
+
+    return a
 
 
-def sigmoid_derivate(dA, z):
+def sigmoid_derivate(z: ndarray):
     a = sigmoid(z)
-    return a * (1 - a)
+    x = a * (1 - a)
+
+    return x
 
 
-def tanh(x):
-    "x should be of the shape (n_features, n_samples)"
+def tanh(x: ndarray):
     xp = cp.get_array_module(x)
-    return xp.tanh(x, out=x)
+    a = xp.tanh(x)
+
+    return a
 
 
-def tanh_derivative(dA, z):
+def tanh_derivative(z: ndarray):
     xp = cp.get_array_module(z)
-    return 1 - xp.tanh(z) ** 2
+    x = 1 - xp.tanh(z) ** 2
+
+    return x
 
 
-def softmax(x):
-    "x should be of the shape (n_features, n_samples)"
+def softmax(x: ndarray):
     xp = cp.get_array_module(x)
     # Subtracting the max to stabilise it (preventing ops with xp.Inf)
-    tmp = x - x.max(axis=0)[xp.newaxis, :]
-    xp.exp(tmp, out=x)
+    a = x - x.max(axis=0)[xp.newaxis, :]
+    xp.exp(a, out=a)
+
     # Sum on axis 0 gives the number of classes
-    x /= x.sum(axis=0)[xp.newaxis, :]
+    a /= a.sum(axis=0)[xp.newaxis, :]
 
-    return x
+    return a
 
 
-def softmax_derivative(dA, z):
+def softmax_derivative(z: ndarray):
     a = softmax(z)
-    return a * (1 - a)
+    x = a * (1 - a)
 
-
-def relu(x):
-    "x should be of the shape (n_features, n_samples)"
-    xp = cp.get_array_module(x)
-    xp.clip(x, 0, xp.finfo(x.dtype).max, out=x)
     return x
 
 
-def relu_derivative(dA, z):
-    dZ = dA.copy()
-    dZ[z <= 0] = 0
-    dZ[z > 0] = 1
-    return dZ
-
-
-def leaky_relu(x):
-    "x should be of the shape (n_features, n_samples)"
-    A = x.copy()
-    A[x <= 0] *= RELU_EPSILON
-    return A
-
-
-def leaky_relu_derivative(dA, z):
-    dZ = dA.copy()
-    dZ[z > 0] = 1
-    dZ[z <= 0] = RELU_EPSILON
-    return dZ
-
-
-def hard_sigmoid(x):
+def relu(x: ndarray):
     xp = cp.get_array_module(x)
-    return xp.clip((x + 1.0) / 2, 0.0, 1.0)
+    a = x.clip(a_min=0, a_max=xp.finfo(x.dtype).max)
+
+    return a
 
 
-def unitstep(x):
-    "x should be of the shape (n_features, n_samples)"
-    x[x >= 0] = 1
-    x[x < 0] = -1
+def relu_derivative(z: ndarray):
+    x = z.copy()
+
+    x[z <= 0] = 0
+    x[z > 0] = 1
+
     return x
 
 
-def hard_tanh(dA, z):
+def leaky_relu(x: ndarray):
+    a = x.copy()
+    a[x <= 0] *= RELU_EPSILON
+
+    return a
+
+
+def leaky_relu_derivative(z: ndarray):
+    x = z.copy()
+
+    x[z > 0] = 1
+    x[z <= 0] = RELU_EPSILON
+
+    return x
+
+
+def hard_sigmoid(x: ndarray):
+    xp = cp.get_array_module(x)
+    a = xp.clip((x + 1.0) / 2, 0.0, 1.0)
+
+    return a
+
+
+def unitstep(x: ndarray):
+    # Faster than a = xp.ones_like(x, dtype=cp.int8); a[x < 0] = -1
+    a = x.copy()
+
+    a[x >= 0] = 1
+    a[x < 0] = -1
+
+    return x
+
+
+def hard_tanh(z: ndarray):
     # equivalent to max(-1, min(z, 1))
-    return z.clip(-1, 1)
+    a = z.clip(-1, 1)
+
+    return a
     # return 2 * hard_sigmoid(z) - 1
 
 

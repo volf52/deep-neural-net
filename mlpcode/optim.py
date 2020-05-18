@@ -12,7 +12,7 @@ class LRScheduler:
     def __init__(
         self,
         alpha=0.1,
-        decay_rate=None,
+        decay_rate: float = None,
         strategy: LRSchedulerStrat = LRSchedulerStrat.na,
         drop_every_n=10,
     ):
@@ -38,11 +38,11 @@ class LRScheduler:
         self.step()
 
     @property
-    def value(self):
+    def value(self) -> float:
         return self.__alpha
 
     @staticmethod
-    def get_default_decay_rate(strategy: LRSchedulerStrat):
+    def get_default_decay_rate(strategy: LRSchedulerStrat) -> float:
         if strategy == LRSchedulerStrat.na:
             return 0.0
         elif strategy == LRSchedulerStrat.time:
@@ -54,7 +54,7 @@ class LRScheduler:
         else:
             raise ValueError("Invalid value for LR Decay Strategy")
 
-    def step(self):
+    def step(self) -> None:
         if self.strategy == LRSchedulerStrat.na:
             self.__alpha = self.__alpha0
         elif self.strategy == LRSchedulerStrat.time:
@@ -68,4 +68,5 @@ class LRScheduler:
                 self.__alpha = self.__alpha0 / self.__decayRate
         else:
             raise ValueError()
+
         self.__stepCount += 1

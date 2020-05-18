@@ -1,6 +1,6 @@
 from datetime import datetime
 from pathlib import Path
-from typing import List, Union
+from typing import List, Union, Tuple
 
 import cupy as cp
 import numpy as np
@@ -12,8 +12,7 @@ from mlpcode.loss import LossFuncs as lf
 from mlpcode.optim import LRScheduler
 from mlpcode.utils import MODELDIR
 
-
-# TODO: remove option for binarized on Network init. Move it only to training
+ArrayList = List[np.ndarray]
 
 
 class Network(object):
@@ -28,19 +27,17 @@ class Network(object):
 
         self.layers = layers
         self.isBinarized = binarized
-        if self.isBinarized:
-            self.non_binarized_weights: List[np.ndarray] = []
-            self.non_binarized_biases: List[np.ndarray] = []
 
         if fineTuning:
-            self.weights, self.biases = [], []
+            self.weights: ArrayList = []
+            self.biases: ArrayList = []
         else:
             # Xavier init
-            self.biases = [
+            self.biases: ArrayList = [
                 self.xp.random.randn(y, 1).astype(np.float32) for y in layers[1:]
             ]
             # Casting to float32 at multiple steps to keep the memory footprint low for each step
-            self.weights = [
+            self.weights: ArrayList = [
                 (
                     self.xp.random.randn(l, l_minus_1).astype(np.float32)
                     * self.xp.sqrt(1 / l_minus_1)
@@ -91,11 +88,11 @@ class Network(object):
         return nn
 
     @staticmethod
-    def binarize(x):
-        xp = cp.get_array_module(x)
-        newX = xp.empty_like(x, dtype=np.int8)
+    def binarize(x: np.ndarray) -> np.ndarray:
+        newX = x.copy().astype(np.int8)
         newX[x >= 0] = 1
         newX[x < 0] = -1
+
         cp.cuda.Stream.null.synchronize()
         return newX
 
@@ -105,10 +102,12 @@ class Network(object):
         hiddenAf: af = af.sigmoid,
         outAf: af = af.sigmoid,
         lossF: lf = lf.mse,
-    ):
+    ) -> None:
+
         assert hiddenAf in ACTIVATION_FUNCTIONS
         assert outAf in ACTIVATION_FUNCTIONS
         assert lossF in LOSS_FUNCS
+
         if lossF == lf.cross_entropy and outAf not in (af.sigmoid, af.softmax):
             # My implementation for normal derivative of cross entropy is not stable enough
             # Luckily, it comes down to (output - target) when used with sigmoid or softmax
@@ -147,19 +146,21 @@ class Network(object):
         shuffle=True,
         valX: np.ndarray = None,
         valY: np.ndarray = None,
-        save_best_params=False,
+        save_best_params=True,
     ):
         if not self.__isCompiled:
             print("\nEXCEPTION: Must compile the model before running train")
             return
 
-        best_weights = [None for _ in self.layers]
-        best_biases = best_weights[:]
+        best_weights: ArrayList = [None for _ in self.layers]
+        best_biases: ArrayList = best_weights[:]
         best_accuracy = -1.0
 
         n = len(trainX)
-        costList = []
-        accList = []
+
+        costList: List[float] = []
+        accList: List[float] = []
+
         if valX is None:
             n_test = n
             valX = trainX.copy()
@@ -168,6 +169,7 @@ class Network(object):
         else:
             n_test = len(valX)
             accType = "Validation"
+
         # No need to keep this in hot vector encoded form
         if valY.shape[0] != valY.size:
             valY = valY.argmax(axis=1).astype(np.uint8)
@@ -177,7 +179,7 @@ class Network(object):
         print("=" * 20)
         print()
         for j in range(epochs):
-            epochCost = []
+            epochCost: List[float] = []
 
             # random shuffling
             if shuffle:
@@ -197,9 +199,11 @@ class Network(object):
             correct = self.evaluate(valX, valY, binarized=self.isBinarized)
             cp.cuda.Stream.null.synchronize()
             acc = correct * 100.0 / n_test
-            cost = float(self.xp.array(epochCost).mean())
+            cost = sum(epochCost) / len(epochCost)
+
             accList.append(acc)
             costList.append(cost)
+
             print(
                 "Epoch {0} / {7}:\t{1} Acc: {2} / {3} ({4:.05f}%)\t{5} Loss: {6:.02f}".format(
                     j + 1, accType, correct, n_test, acc, accType, cost, epochs,
@@ -222,15 +226,17 @@ class Network(object):
 
         return costList, accList
 
-    def __update_batch(self, batch, lr):
+    def __update_batch(self, batch: Tuple[np.ndarray, np.ndarray], lr: float) -> float:
         x, y = batch
-        m = x.shape[0] * 1.0
+        m = x.shape[0]
+
         if self.isBinarized:
             weights = [self.binarize(w) for w in self.weights]
             biases = [self.binarize(b) for b in self.biases]
         else:
             weights = self.weights
             biases = self.biases
+
         delta_nabla_b, delta_nabla_w, cost = self.__backprop(x, y, weights, biases)
         cp.cuda.Stream.null.synchronize()
         # matrix.sum(axis=0) => 3
@@ -252,44 +258,53 @@ class Network(object):
         self.weights = [w - (lr * nw) for w, nw in zip(self.weights, nabla_w)]
         self.biases = [b - (lr * nb) for b, nb in zip(self.biases, nabla_b)]
         cp.cuda.Stream.null.synchronize()
+
         return cost
 
-    def __backprop(self, x, y, weights, biases):
-        nabla_b = [None for _ in biases]
-        nabla_w = [None for _ in weights]
+    def __backprop(
+        self, x, y, weights: ArrayList, biases: ArrayList
+    ) -> Tuple[ArrayList, ArrayList, float]:
+
+        delta_nabla_w: ArrayList = [None for _ in weights]
+        delta_nabla_b: ArrayList = [None for _ in biases]
 
         # forward pass
         zs, activations, activation = self.__forwardpass(x, weights, biases)
 
         y = y.T
+
         # Mean cost of whole batch
-        cost = self.__loss(activation, y).mean()
+        cost = float(self.__loss(activation, y).mean())
+
         # backward pass
         dLdA = self.__loss_derivative(activation, y)  # expected shape: k * n
         cp.cuda.Stream.null.synchronize()
+
         if (self.__outAF == af.identity) or (
             self.__outAF == af.softmax and self.__lossF == lf.cross_entropy
         ):
             delta = dLdA
         else:
-            dAdZ = self.__outputDerivative(dLdA, zs[-1])
+            dAdZ = self.__outputDerivative(zs[-1])
             delta = dLdA * dAdZ
-        nabla_b[-1] = delta
-        nabla_w[-1] = self.xp.dot(delta, activations[-2].T)
+        delta_nabla_b[-1] = delta
+        delta_nabla_w[-1] = self.xp.dot(delta, activations[-2].T)
         cp.cuda.Stream.null.synchronize()
 
         for l in range(2, self.num_layers + 1):
             z = zs[-l]
             dAprev = self.xp.dot(weights[-l + 1].T, delta)
             cp.cuda.Stream.null.synchronize()
-            delta = dAprev * self.__hiddenDerivative(dAprev, z)
+            delta = dAprev * self.__hiddenDerivative(z)
             cp.cuda.Stream.null.synchronize()
-            nabla_b[-l] = delta
-            nabla_w[-l] = self.xp.dot(delta, activations[-l - 1].T)
+            delta_nabla_b[-l] = delta
+            delta_nabla_w[-l] = self.xp.dot(delta, activations[-l - 1].T)
             cp.cuda.Stream.null.synchronize()
-        return (nabla_b, nabla_w, cost)
+        return (delta_nabla_b, delta_nabla_w, cost)
 
-    def __forwardpass(self, x, weights, biases):
+    def __forwardpass(
+        self, x: np.ndarray, weights: ArrayList, biases: ArrayList
+    ) -> Tuple[ArrayList, ArrayList, np.ndarray]:
         a = x.T
         activations = [a]  # list to store all the activations, layer by layer
         zs = []  # list to store all the z vectors, layer by layer
@@ -302,17 +317,20 @@ class Network(object):
             activations.append(a)
         return zs, activations, a
 
-    def predict(self, X, weights=None, biases=None):
+    def predict(self, X, weights: ArrayList = None, biases: ArrayList = None):
         if weights is None:
             weights = self.weights
         if biases is None:
             biases = self.biases
+
         _, _, yhat = self.__forwardpass(X, weights=weights, biases=biases)
         cp.cuda.Stream.null.synchronize()
+
         preds = yhat.argmax(axis=0).reshape(-1, 1)
+
         return preds
 
-    def evaluate(self, X, y, batch_size=1, binarized=False):
+    def evaluate(self, X: np.ndarray, y: np.ndarray, batch_size=1, binarized=False):
         # testY should NOT be one hot encoded for this to work
         # The code at the start of training takes care of it if testY was one-hot encoded
         # when passed into the train func
@@ -337,6 +355,7 @@ class Network(object):
 
     def save_weights(self, modelName: str, binarized=False):
         fName = f"{modelName}_{datetime.utcnow().timestamp()}"
+
         if binarized:
             fName += "_binarized"
         filePth = MODELDIR / fName
@@ -351,10 +370,11 @@ class Network(object):
         weights_to_save = [cp.asnumpy(w) for w in weights]
         biases_to_save = [cp.asnumpy(b) for b in biases]
         print(f"Saving model to {filePth}.npz")
+
         self.xp.savez(filePth, weights_to_save, biases_to_save, self.layers)
 
     @staticmethod
-    def get_batches(X, y, batch_size, n):
+    def get_batches(X: np.ndarray, y: np.ndarray, batch_size: int, n: int):
         if batch_size == 1:
             batches = [(X, y)]
         else:
@@ -362,4 +382,5 @@ class Network(object):
                 (X[k : k + batch_size, :], y[k : k + batch_size, :],)
                 for k in range(0, n, batch_size)
             ]
+
         return batches
