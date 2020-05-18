@@ -113,6 +113,10 @@ class Network(object):
             # Luckily, it comes down to (output - target) when used with sigmoid or softmax
             raise ValueError("Gotta use sigmoid or softmax with cross entropy loss")
 
+        if self.isBinarized and hiddenAf != af.sign:
+            print(f"Changing hidden activation function to {af.sign} for BNN")
+            hiddenAf = af.sign
+
         self.__lossF = lossF
         self.__loss = LOSS_FUNCS[lossF]
         self.__loss_derivative = LOSS_DERIVATES[lossF]

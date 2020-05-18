@@ -115,9 +115,9 @@ def unitstep(x: ndarray):
 def hard_tanh(z: ndarray):
     # equivalent to max(-1, min(z, 1))
     a = z.clip(-1, 1)
+    # a = 2 * hard_sigmoid(z) - 1
 
     return a
-    # return 2 * hard_sigmoid(z) - 1
 
 
 class ActivationFuncs(Enum):

@@ -4,13 +4,13 @@ from mlpcode.network import Network
 from mlpcode.utils import DATASETS, loadDataset
 
 useGpu = True
-binarized = False
+binarized = True
 dataset = DATASETS.mnist
 print("Loading {}".format(dataset))
 trainX, trainY, testX, testY = loadDataset(dataset, useGpu=useGpu)
 print("Finished loading {} data".format(dataset))
 layers = [trainX.shape[1], 512, 10]
-epochs = 10
+epochs = 500
 batchSize = 600
 lr = 0.07
 # lr = LRScheduler(alpha=0.07, decay_rate=0.8, strategy=LRS.time)
