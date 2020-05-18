@@ -64,8 +64,8 @@ def softmax_derivative(z: ndarray):
 
 
 def relu(x: ndarray):
-    xp = cp.get_array_module(x)
-    a = x.clip(a_min=0, a_max=xp.finfo(x.dtype).max)
+    a = x.copy()
+    a[x < 0] = 0
 
     return a
 
@@ -81,7 +81,7 @@ def relu_derivative(z: ndarray):
 
 def leaky_relu(x: ndarray):
     a = x.copy()
-    a[x <= 0] *= RELU_EPSILON
+    a[x < 0] *= RELU_EPSILON
 
     return a
 
