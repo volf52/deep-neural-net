@@ -7,10 +7,10 @@ useGpu = True
 binarized = False
 dataset = DATASETS.fashion
 print("Loading {}".format(dataset))
-trainX, trainY, testX, testY = loadDataset(dataset, useGpu=useGpu)
+# trainX, trainY, testX, testY = loadDataset(dataset, useGpu=useGpu)
 # Set quant_precision to any integer > 1 to quantize the input,
 # The quantized input having quant_precision + 1 unique elements
-# trainX, trainY, testX, testY = loadDataset(dataset, useGpu=useGpu, quant_precision=16)
+trainX, trainY, testX, testY = loadDataset(dataset, useGpu=useGpu, quant_precision=2)
 print("Finished loading {} data".format(dataset))
 
 layers = [trainX.shape[1], 512, 10]
@@ -39,13 +39,11 @@ nn.train(trainX, trainY, epochs, batch_size=batchSize, save_best_params=True)
 nn.save_weights(modelName=str(dataset), binarized=False)
 
 # Change binarized to true to get the accuracy using binarized weights
-testingType = "binarized"
-correct = nn.evaluate(
-    testX, testY, batch_size=batchSize, binarized=testingType == "binarized"
-)
+testingIsBinarized = False
+correct = nn.evaluate(testX, testY, batch_size=batchSize, binarized=testingIsBinarized)
 acc = correct / testX.shape[0] * 100.0
 print(
     "Accuracy on test set with {3} testing:\t{0} / {1} : {2:.03f}%".format(
-        correct, testX.shape[0], acc, testingType
+        correct, testX.shape[0], acc, ["normal", "binarized"][testingIsBinarized]
     )
 )
