@@ -7,10 +7,12 @@ from typing import Tuple, Union
 import cupy as cp
 import numpy as np
 
-prnt = Path(__file__).parent
 
 # CONFIGURATION
+
+prnt = Path(__file__).parent
 CONFIG_FILE = prnt / "nn.config.json"
+
 if CONFIG_FILE.exists():
     # print(f"Reading config from {CONFIG_FILE}")
     with CONFIG_FILE.open("r") as f:
@@ -115,6 +117,24 @@ def oneHotEncode(classes: int, y: np.ndarray) -> np.ndarray:
     oneHotEncoded = xp.eye(classes, dtype=np.uint8)[y]
 
     return oneHotEncoded
+
+
+def quantize(x: np.ndarray, precision=32):
+    """
+    Inplace quantization. Doesn't return anything. Maps input range to evenly divided set of precision+1 elements
+
+    Parameters
+    ----------
+    x
+        The array to quantize
+    precision
+        The number of unique element in the mapped set after quantization
+    """
+
+    xp = cp.get_array_module(x)
+    xp.multiply(x, precision, out=x)
+    xp.round_(x, out=x)
+    xp.divide(x, precision, out=x)
 
 
 # TODO: Finish split_train_valid
@@ -635,7 +655,9 @@ LOADING_FUNCS = {
 }
 
 
-def loadDataset(dataset: DATASETS, useGpu=True, encoded=True) -> TRAIN_TEST_DATA:
+def loadDataset(
+    dataset: DATASETS, useGpu=True, encoded=True, quant_precision: int = None
+) -> TRAIN_TEST_DATA:
     """
     Loads a given dataset
 
@@ -647,6 +669,8 @@ def loadDataset(dataset: DATASETS, useGpu=True, encoded=True) -> TRAIN_TEST_DATA
         Whether to use GPU or CPU as data device
     encoded
         Whether to one-hot encode the training labels (trainY)
+    quant_precision
+        The precision for quantization
 
     Returns
     -------
@@ -659,14 +683,25 @@ def loadDataset(dataset: DATASETS, useGpu=True, encoded=True) -> TRAIN_TEST_DATA
     """
 
     if str(dataset).startswith("mnist_c"):
-        return loadMnistC(dataset, useGpu=useGpu, encoded=encoded)
+        data = loadMnistC(dataset, useGpu=useGpu, encoded=encoded)
     else:
         loadFunc = LOADING_FUNCS[dataset]
-        return loadFunc(useGpu=useGpu, encoded=encoded)
+        data = loadFunc(useGpu=useGpu, encoded=encoded)
+
+    if quant_precision is not None:
+        assert type(quant_precision) is int
+        assert quant_precision > 1
+
+        trainX, trainY, testX, testY = data
+        quantize(trainX, precision=quant_precision)
+        quantize(testX, precision=quant_precision)
+        data = (trainX, trainY, testX, testY)
+
+    return data
 
 
 if __name__ == "__main__":
-    trainX, trainY, testX, testY = loadDataset(DATASETS.cifar10)
+    trainX, trainY, testX, testY = loadDataset(DATASETS.cifar10, quant_precision=32)
     # trainX, trainY, testX, testY = loadAffNist(useGpu=False)
 
     print((trainX.shape, trainX.dtype))

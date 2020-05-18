@@ -4,18 +4,22 @@ from mlpcode.network import Network
 from mlpcode.utils import DATASETS, loadDataset
 
 useGpu = True
-binarized = True
-dataset = DATASETS.mnist
+binarized = False
+dataset = DATASETS.fashion
 print("Loading {}".format(dataset))
 trainX, trainY, testX, testY = loadDataset(dataset, useGpu=useGpu)
+# Set quant_precision to any integer > 1 to quantize the input,
+# The quantized input having quant_precision + 1 unique elements
+# trainX, trainY, testX, testY = loadDataset(dataset, useGpu=useGpu, quant_precision=16)
 print("Finished loading {} data".format(dataset))
+
 layers = [trainX.shape[1], 512, 10]
-epochs = 500
+epochs = 100
 batchSize = 600
 lr = 0.07
 # lr = LRScheduler(alpha=0.07, decay_rate=0.8, strategy=LRS.time)
-print("\nCreating neural net")
 
+print("\nCreating neural net")
 # Creating from scratch
 nn = Network(layers, useGpu=useGpu, binarized=binarized)
 
