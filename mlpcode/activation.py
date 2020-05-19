@@ -109,7 +109,7 @@ def unitstep(x: ndarray):
     a[x >= 0] = 1
     a[x < 0] = -1
 
-    return x
+    return a
 
 
 def hard_tanh(z: ndarray):
