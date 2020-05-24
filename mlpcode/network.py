@@ -17,7 +17,12 @@ ArrayList = List[np.ndarray]
 
 class Network(object):
     def __init__(
-        self, layers: List[int], useGpu=False, fineTuning=False, binarized=False,
+        self,
+        layers: List[int],
+        useGpu=False,
+        fineTuning=False,
+        binarized=False,
+        useBias=False,
     ):
 
         if useGpu:
@@ -27,15 +32,20 @@ class Network(object):
 
         self.layers = layers
         self.isBinarized = binarized
+        self.useBias = useBias
 
-        if fineTuning:
-            self.weights: ArrayList = []
-            self.biases: ArrayList = []
-        else:
+        self.weights: ArrayList = []
+        self.biases: ArrayList = []
+        self.H = []
+
+        if not fineTuning:
             # Xavier init
-            self.biases: ArrayList = [
-                self.xp.random.randn(y, 1).astype(np.float32) for y in layers[1:]
-            ]
+            if useBias:
+                self.biases: ArrayList = [
+                    self.xp.random.randn(y, 1).astype(np.float32) for y in layers[1:]
+                ]
+            else:
+                self.biases = [None for _ in layers[1:]]
             # Casting to float32 at multiple steps to keep the memory footprint low for each step
             self.weights: ArrayList = [
                 (
@@ -43,6 +53,10 @@ class Network(object):
                     * self.xp.sqrt(1 / l_minus_1)
                 ).astype(np.float32)
                 for l_minus_1, l in zip(layers[:-1], layers[1:])
+            ]
+            self.H = [
+                self.xp.sqrt(1.5 / sum(w.shape)).astype(np.float32)
+                for w in self.weights
             ]
         cp.cuda.Stream.null.synchronize()
 
@@ -62,12 +76,12 @@ class Network(object):
         return self.__isCompiled
 
     @staticmethod
-    def fromModel(
-        filePth: Path, useGpu=False, binarized=False,
-    ):
+    def fromModel(filePth: Path, useGpu=False, binarized=False, useBias=False):
         assert filePth.exists()
         print(f"\nLoading model from {filePth}\n")
-        nn = Network([], useGpu=useGpu, fineTuning=True, binarized=binarized,)
+        nn = Network(
+            [], useGpu=useGpu, fineTuning=True, binarized=binarized, useBias=useBias
+        )
         # If the file was saved using cupy, it would convert the weights (and biases)
         # list to an object array, so allow_pickle and subsequent conversion is for that
         with nn.xp.load(filePth, allow_pickle=True) as fp:
@@ -82,16 +96,20 @@ class Network(object):
             # Conversion done for the same reason allow_pickle is used above
             nn.weights = [nn.xp.array(x, dtype=np.float32) for x in npzfile[keyArr[0]]]
             nn.biases = [nn.xp.array(x, dtype=np.float32) for x in npzfile[keyArr[1]]]
+            nn.H = [
+                nn.xp.sqrt(1.5 / sum(w.shape)).astype(np.float32) for w in nn.weights
+            ]
             # Just to ensure consistency
-            nn.layers = list(map(int, fp[keyArr[2]]))
+            nn.layers = list(map(int, npzfile[keyArr[2]]))
             nn.num_layers = len(nn.layers) - 1
         return nn
 
     @staticmethod
-    def binarize(x: np.ndarray) -> np.ndarray:
-        newX = x.copy().astype(np.int8)
+    def binarize(x: np.ndarray, H=1.0) -> np.ndarray:
+        newX = x.copy()
         newX[x >= 0] = 1
         newX[x < 0] = -1
+        newX *= H
 
         cp.cuda.Stream.null.synchronize()
         return newX
@@ -217,7 +235,8 @@ class Network(object):
             if save_best_params and acc > best_accuracy:
                 best_accuracy = acc
                 best_weights = [w.copy() for w in self.weights]
-                best_biases = [b.copy() for b in self.biases]
+                if self.useBias:
+                    best_biases = [b.copy() for b in self.biases]
                 cp.cuda.Stream.null.synchronize()
 
         if save_best_params:
@@ -234,12 +253,13 @@ class Network(object):
         x, y = batch
         m = x.shape[0]
 
+        biases = self.biases
         if self.isBinarized:
-            weights = [self.binarize(w) for w in self.weights]
-            biases = [self.binarize(b) for b in self.biases]
+            weights = [self.binarize(w, H=h) for w, h in zip(self.weights, self.H)]
+            if self.useBias:
+                biases = [self.binarize(b, H=h) for b, h in zip(self.biases, self.H)]
         else:
             weights = self.weights
-            biases = self.biases
 
         delta_nabla_b, delta_nabla_w, cost = self.__backprop(x, y, weights, biases)
         cp.cuda.Stream.null.synchronize()
@@ -254,13 +274,14 @@ class Network(object):
         # [1,2,3,4]
         # [1,2,3,4]
         # [1,2,3,4]
-
-        nabla_b = [nb.mean(axis=1, keepdims=True) for nb in delta_nabla_b]
+        if self.useBias:
+            nabla_b = [nb.mean(axis=1, keepdims=True) for nb in delta_nabla_b]
         nabla_w = [(nw / m) for nw in delta_nabla_w]
         cp.cuda.Stream.null.synchronize()
 
         self.weights = [w - (lr * nw) for w, nw in zip(self.weights, nabla_w)]
-        self.biases = [b - (lr * nb) for b, nb in zip(self.biases, nabla_b)]
+        if self.useBias:
+            self.biases = [b - (lr * nb) for b, nb in zip(self.biases, nabla_b)]
         cp.cuda.Stream.null.synchronize()
 
         return cost
@@ -281,7 +302,7 @@ class Network(object):
         cost = float(self.__loss(activation, y).mean())
 
         # backward pass
-        dLdA = self.__loss_derivative(activation, y)  # expected shape: k * n
+        dLdA = self.__loss_derivative(activation, y, zs[-1])  # expected shape: k * n
         cp.cuda.Stream.null.synchronize()
 
         if (self.__outAF == af.identity) or (
@@ -314,7 +335,9 @@ class Network(object):
         zs = []  # list to store all the z vectors, layer by layer
         # (num_features, num_examples)
         for w, b, afunc in zip(weights, biases, self.__activations):
-            z = self.xp.dot(w, a) + b
+            z = self.xp.dot(w, a)
+            if self.useBias:
+                z += b
             cp.cuda.Stream.null.synchronize()
             zs.append(z)
             a = afunc(z)
@@ -342,12 +365,13 @@ class Network(object):
         # Expected shape for X: num_instances * num_features
         # Expected shape for y: num_instances * 1
 
+        biases = self.biases
         if binarized:
-            weights = [self.binarize(w) for w in self.weights]
-            biases = [self.binarize(b) for b in self.biases]
+            weights = [self.binarize(w, H=h) for w, h in zip(self.weights, self.H)]
+            if self.useBias:
+                biases = [self.binarize(b, H=h) for b, h in zip(self.biases, self.H)]
         else:
             weights = self.weights
-            biases = self.biases
 
         batches = self.get_batches(X, y, batch_size=batch_size, n=X.shape[0])
         correct = 0
@@ -364,12 +388,16 @@ class Network(object):
             fName += "_binarized"
         filePth = MODELDIR / fName
 
+        biases = self.biases
         if binarized:
             weights = (self.binarize(w) for w in self.weights)
-            biases = (self.binarize(b) for b in self.biases)
+            if self.useBias:
+                biases = (self.binarize(b) for b in self.biases)
         else:
             weights = self.weights
-            biases = self.biases
+
+        if not self.useBias:
+            biases = [0 for _ in biases]
 
         weights_to_save = [cp.asnumpy(w) for w in weights]
         biases_to_save = [cp.asnumpy(b) for b in biases]
