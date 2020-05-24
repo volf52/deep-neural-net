@@ -83,7 +83,7 @@ class Network(object):
             nn.weights = [nn.xp.array(x, dtype=np.float32) for x in npzfile[keyArr[0]]]
             nn.biases = [nn.xp.array(x, dtype=np.float32) for x in npzfile[keyArr[1]]]
             # Just to ensure consistency
-            nn.layers = list(map(int, fp[keyArr[2]]))
+            nn.layers = list(map(int, npzfile[keyArr[2]]))
             nn.num_layers = len(nn.layers) - 1
         return nn
 
@@ -281,7 +281,7 @@ class Network(object):
         cost = float(self.__loss(activation, y).mean())
 
         # backward pass
-        dLdA = self.__loss_derivative(activation, y)  # expected shape: k * n
+        dLdA = self.__loss_derivative(activation, y, zs[-1])  # expected shape: k * n
         cp.cuda.Stream.null.synchronize()
 
         if (self.__outAF == af.identity) or (

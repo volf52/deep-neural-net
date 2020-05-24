@@ -36,7 +36,7 @@ def cross_entropy_loss(yhat, y, eps=1e-15):
     return L
 
 
-def cross_entropy_derivative(yhat, y):
+def cross_entropy_derivative(yhat, y, _):
     """
     Derivative for Mean Squared Error
 
@@ -82,7 +82,7 @@ def mse(yhat, y):
     return cost
 
 
-def mse_derivative(yhat, y):
+def mse_derivative(yhat, y, _):
     """
     Derivative for Mean Squared Error
 
@@ -102,9 +102,31 @@ def mse_derivative(yhat, y):
     return yhat - y
 
 
+def squared_hinge_loss(yhat: cp.ndarray, y: cp.ndarray):
+    assert yhat.shape == y.shape
+
+    xp = cp.get_array_module(yhat)
+    loss = 1 - yhat * y
+    xp.maximum(0, loss, out=loss)
+    xp.square(loss, out=loss)
+
+    return loss.mean(axis=0)
+
+
+def squared_hinge_derivative(yhat, y, x):
+    assert yhat.shape == y.shape
+
+    v = yhat * y
+    grad = -y * x
+    grad[v > 1] = 0
+
+    return grad
+
+
 class LossFuncs(Enum):
     cross_entropy = "cross_entropy"
     mse = "mse"
+    sq_hinge = "squared_hinge"
 
     def __repr__(self):
         return self.value
@@ -116,9 +138,11 @@ class LossFuncs(Enum):
 LOSS_FUNCS = {
     LossFuncs.cross_entropy: cross_entropy_loss,
     LossFuncs.mse: mse,
+    LossFuncs.sq_hinge: squared_hinge_loss,
 }
 
 LOSS_DERIVATES = {
     LossFuncs.cross_entropy: cross_entropy_derivative,
     LossFuncs.mse: mse_derivative,
+    LossFuncs.sq_hinge: squared_hinge_derivative,
 }

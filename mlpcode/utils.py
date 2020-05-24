@@ -104,7 +104,7 @@ def oneHotEncode(classes: int, y: np.ndarray) -> np.ndarray:
     Returns
     -------
     np.ndarray
-        A 2D array of shape (y.shape[0], num_classes) and dtype np.uint8
+        A 2D array of shape (y.shape[0], num_classes) and dtype np.int8
 
     """
     xp = cp.get_array_module(y)
@@ -114,7 +114,7 @@ def oneHotEncode(classes: int, y: np.ndarray) -> np.ndarray:
 
     assert y.ndim == 1
 
-    oneHotEncoded = xp.eye(classes, dtype=np.uint8)[y]
+    oneHotEncoded = xp.eye(classes, dtype=np.int8)[y]
 
     return oneHotEncoded
 
