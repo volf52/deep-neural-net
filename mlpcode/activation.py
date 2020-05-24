@@ -116,6 +116,7 @@ def hard_tanh(z: ndarray):
     # equivalent to max(-1, min(z, 1))
     a = z.clip(-1, 1)
     # a = 2 * hard_sigmoid(z) - 1
+    # No need for the hard_sigmoid thing. Same as clip
 
     return a
 

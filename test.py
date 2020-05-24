@@ -17,6 +17,7 @@ layers = [trainX.shape[1], 500, 1000, 10]
 epochs = 500
 batchSize = 600
 lr = 0.001
+# lr = 0.07
 # lr = LRScheduler(alpha=0.07, decay_rate=0.8, strategy=LRS.time)
 
 print("\nCreating neural net")
@@ -29,7 +30,7 @@ nn = Network(layers, useGpu=useGpu, binarized=binarized)
 # nn = Network.fromModel(modelPath, useGpu=useGpu, binarized=binarized)
 
 # Must compile the model before trying to train it
-nn.compile(lr=lr, hiddenAf=af.leaky_relu, outAf=af.softmax, lossF=lf.cross_entropy)
+nn.compile(lr=lr, hiddenAf=af.sign, outAf=af.softmax, lossF=lf.cross_entropy)
 
 # Save best will switch the model weights and biases to the ones with best accuracy at the end of the training loop
 nn.train(trainX, trainY, epochs, batch_size=batchSize, save_best_params=True)
