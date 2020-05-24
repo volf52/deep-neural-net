@@ -4,7 +4,7 @@ from mlpcode.network import Network
 from mlpcode.utils import DATASETS, loadDataset
 
 useGpu = True
-binarized = False
+binarized = True
 dataset = DATASETS.mnist
 print("Loading {}".format(dataset))
 trainX, trainY, testX, testY = loadDataset(dataset, useGpu=useGpu)
@@ -14,7 +14,7 @@ trainX, trainY, testX, testY = loadDataset(dataset, useGpu=useGpu)
 print("Finished loading {} data".format(dataset))
 
 layers = [trainX.shape[1], 500, 1000, 10]
-epochs = 500
+epochs = 100
 batchSize = 600
 lr = 0.001
 # lr = 0.07
@@ -22,7 +22,7 @@ lr = 0.001
 
 print("\nCreating neural net")
 # Creating from scratch
-nn = Network(layers, useGpu=useGpu, binarized=binarized)
+nn = Network(layers, useGpu=useGpu, binarized=binarized, useBias=False)
 
 # Creating from a pretrained model
 # modelPath = MODELDIR / "mnist_1589624361.944349.npz"
@@ -39,8 +39,20 @@ nn.train(trainX, trainY, epochs, batch_size=batchSize, save_best_params=True)
 # Set binarized to true if you want to save the binary version of the weights
 nn.save_weights(modelName=str(dataset), binarized=False)
 
-# Change binarized to true to get the accuracy using binarized weights
-testingIsBinarized = True
+
+if binarized:
+    testingIsBinarized = True
+    correct = nn.evaluate(
+        testX, testY, batch_size=batchSize, binarized=testingIsBinarized
+    )
+    acc = correct / testX.shape[0] * 100.0
+    print(
+        "Accuracy on test set with {3} testing:\t{0} / {1} : {2:.03f}%".format(
+            correct, testX.shape[0], acc, ["normal", "binarized"][testingIsBinarized]
+        )
+    )
+
+testingIsBinarized = False
 correct = nn.evaluate(testX, testY, batch_size=batchSize, binarized=testingIsBinarized)
 acc = correct / testX.shape[0] * 100.0
 print(

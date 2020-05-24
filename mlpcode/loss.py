@@ -113,6 +113,7 @@ def squared_hinge_loss(yhat: cp.ndarray, y: cp.ndarray):
     return loss.mean(axis=0)
 
 
+# TODO: find a proper implemetation for the derivative
 def squared_hinge_derivative(yhat, y, x):
     assert yhat.shape == y.shape
 
@@ -126,7 +127,7 @@ def squared_hinge_derivative(yhat, y, x):
 class LossFuncs(Enum):
     cross_entropy = "cross_entropy"
     mse = "mse"
-    sq_hinge = "squared_hinge"
+    # sq_hinge = "squared_hinge"
 
     def __repr__(self):
         return self.value
@@ -138,11 +139,11 @@ class LossFuncs(Enum):
 LOSS_FUNCS = {
     LossFuncs.cross_entropy: cross_entropy_loss,
     LossFuncs.mse: mse,
-    LossFuncs.sq_hinge: squared_hinge_loss,
+    # LossFuncs.sq_hinge: squared_hinge_loss,
 }
 
 LOSS_DERIVATES = {
     LossFuncs.cross_entropy: cross_entropy_derivative,
     LossFuncs.mse: mse_derivative,
-    LossFuncs.sq_hinge: squared_hinge_derivative,
+    # LossFuncs.sq_hinge: squared_hinge_derivative,
 }
