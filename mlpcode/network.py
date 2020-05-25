@@ -196,6 +196,10 @@ class Network(object):
         if valY.shape[0] != valY.size:
             valY = valY.argmax(axis=1).astype(np.uint8)
 
+        # Binary One hot encoded {0, 1} to {-1, 1}
+        if self.__lossF == lf.hinge:
+            trainY[trainY == 0] = -1
+
         valY = valY.reshape(-1, 1)
         print(f"\n\nStarting training (binarized: {self.isBinarized})")
         print("=" * 20)
@@ -280,6 +284,9 @@ class Network(object):
         cp.cuda.Stream.null.synchronize()
 
         self.weights = [w - (lr * nw) for w, nw in zip(self.weights, nabla_w)]
+        if self.isBinarized:
+            for w, h in zip(self.weights, self.H):
+                self.xp.clip(w, -h, h, out=w)
         if self.useBias:
             self.biases = [b - (lr * nb) for b, nb in zip(self.biases, nabla_b)]
         cp.cuda.Stream.null.synchronize()
@@ -302,7 +309,7 @@ class Network(object):
         cost = float(self.__loss(activation, y).mean())
 
         # backward pass
-        dLdA = self.__loss_derivative(activation, y, zs[-1])  # expected shape: k * n
+        dLdA = self.__loss_derivative(activation, y)  # expected shape: k * n
         cp.cuda.Stream.null.synchronize()
 
         if (self.__outAF == af.identity) or (

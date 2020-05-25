@@ -661,7 +661,7 @@ def loadDataset(
     useGpu=True,
     encoded=True,
     quant_precision: int = None,
-    quantize_test=True,
+    quantize_test=False,
 ) -> TRAIN_TEST_DATA:
     """
     Loads a given dataset
