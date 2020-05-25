@@ -1,6 +1,7 @@
 from mlpcode.activation import ActivationFuncs as af
 from mlpcode.loss import LossFuncs as lf
 from mlpcode.network import Network
+from mlpcode.optim import LRScheduler, LRSchedulerStrat as LRS
 from mlpcode.utils import DATASETS, loadDataset
 
 useGpu = True
@@ -16,9 +17,11 @@ print("Finished loading {} data".format(dataset))
 layers = [trainX.shape[1], 500, 1000, 10]
 epochs = 100
 batchSize = 600
-lr = 0.001
+# lr = 0.001
 # lr = 0.07
-# lr = LRScheduler(alpha=0.07, decay_rate=0.8, strategy=LRS.time)
+lr = LRScheduler(
+    alpha=0.005, decay_rate=(0.005 - 1e-4) ** (1 / epochs), strategy=LRS.exp
+)
 
 print("\nCreating neural net")
 # Creating from scratch
