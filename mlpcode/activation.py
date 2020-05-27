@@ -23,8 +23,8 @@ def sigmoid(x: ndarray):
     return a
 
 
-def sigmoid_derivate(z: ndarray):
-    a = sigmoid(z)
+def sigmoid_derivate(a: ndarray):
+    # a = sigmoid(z)
     x = a * (1 - a)
 
     return x
@@ -56,8 +56,8 @@ def softmax(x: ndarray):
     return a
 
 
-def softmax_derivative(z: ndarray):
-    a = softmax(z)
+def softmax_derivative(a: ndarray):
+    # a = softmax(z)
     x = a * (1 - a)
 
     return x

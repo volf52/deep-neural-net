@@ -4,8 +4,8 @@ from mlpcode.network import Network
 from mlpcode.optim import LRScheduler, LRSchedulerStrat as LRS
 from mlpcode.utils import DATASETS, loadDataset
 
-useGpu = True
-binarized = True
+useGpu = False
+binarized = False
 dataset = DATASETS.mnist
 print("Loading {}".format(dataset))
 trainX, trainY, testX, testY = loadDataset(dataset, useGpu=useGpu)
@@ -14,7 +14,7 @@ trainX, trainY, testX, testY = loadDataset(dataset, useGpu=useGpu)
 # trainX, trainY, testX, testY = loadDataset(dataset, useGpu=useGpu, quant_precision=2)
 print("Finished loading {} data".format(dataset))
 
-layers = [trainX.shape[1], 500, 1000, 10]
+layers = [trainX.shape[1], 256, 10]
 epochs = 100
 batchSize = 600
 # lr = 0.001
@@ -41,7 +41,6 @@ nn.train(trainX, trainY, epochs, batch_size=batchSize, save_best_params=True)
 # Save will be called separately if we want to save the model
 # Set binarized to true if you want to save the binary version of the weights
 nn.save_weights(modelName=str(dataset), binarized=False)
-
 
 if binarized:
     testingIsBinarized = True

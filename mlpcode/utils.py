@@ -273,8 +273,8 @@ def loadX(
 
     X = (
         loadFunc(file_pth, False, useGpu)
-            .reshape(num_instances, num_features)
-            .astype(np.float32)
+        .reshape(num_instances, num_features)
+        .astype(np.float32)
     )
 
     # using inplace operator to not waste memory on copying and operating on a copy

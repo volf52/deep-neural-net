@@ -50,8 +50,8 @@ class Network(object):
             # Casting to float32 at multiple steps to keep the memory footprint low for each step
             self.weights: ArrayList = [
                 (
-                        self.xp.random.randn(l, l_minus_1).astype(np.float32)
-                        * self.xp.sqrt(1 / l_minus_1)
+                    self.xp.random.randn(l, l_minus_1).astype(np.float32)
+                    * self.xp.sqrt(1 / l_minus_1)
                 ).astype(np.float32)
                 for l_minus_1, l in zip(layers[:-1], layers[1:])
             ]
@@ -322,7 +322,7 @@ class Network(object):
             cp.cuda.Stream.null.synchronize()
 
         if (self.__outAF == af.identity) or (
-                self.__outAF == af.softmax and self.__lossF == lf.cross_entropy
+            self.__outAF == af.softmax and self.__lossF == lf.cross_entropy
         ):
             delta = dLdA
         else:
@@ -412,9 +412,9 @@ class Network(object):
 
         biases = self.biases
         if binarized:
-            weights = (self.binarize(w) for w in self.weights)
+            weights = (self.binarize(w, H=h) for w, h in zip(self.weights, self.H))
             if self.useBias:
-                biases = (self.binarize(b) for b in self.biases)
+                biases = (self.binarize(b, H=h) for b, h in zip(self.biases, self.H))
         else:
             weights = self.weights
 
