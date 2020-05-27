@@ -7,7 +7,6 @@ from typing import Tuple, Union
 import cupy as cp
 import numpy as np
 
-
 # CONFIGURATION
 
 prnt = Path(__file__).parent
@@ -241,7 +240,8 @@ def loadNpyFile(file_pth: Path, isTest: bool, useGpu=True) -> np.ndarray:
     dt = np.uint8 if isTest else np.float32
 
     data = xp.load(file_pth).astype(dt)
-    cp.cuda.Stream.null.synchronize()
+    if useGpu:
+        cp.cuda.Stream.null.synchronize()
 
     return data
 
@@ -273,13 +273,14 @@ def loadX(
 
     X = (
         loadFunc(file_pth, False, useGpu)
-        .reshape(num_instances, num_features)
-        .astype(np.float32)
+            .reshape(num_instances, num_features)
+            .astype(np.float32)
     )
 
     # using inplace operator to not waste memory on copying and operating on a copy
     X /= 255.0
-    cp.cuda.Stream.null.synchronize()
+    if useGpu:
+        cp.cuda.Stream.null.synchronize()
 
     return X
 
@@ -312,7 +313,8 @@ def loadY(file_pth: Path, loadFunc, useGpu=True, encoded=True) -> np.ndarray:
     else:
         y = y.reshape(-1, 1)
 
-    cp.cuda.Stream.null.synchronize()
+    if useGpu:
+        cp.cuda.Stream.null.synchronize()
 
     return y
 

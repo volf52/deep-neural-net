@@ -33,6 +33,7 @@ class Network(object):
         self.layers = layers
         self.isBinarized = binarized
         self.useBias = useBias
+        self.useGpu = useGpu
 
         self.weights: ArrayList = []
         self.biases: ArrayList = []
@@ -49,8 +50,8 @@ class Network(object):
             # Casting to float32 at multiple steps to keep the memory footprint low for each step
             self.weights: ArrayList = [
                 (
-                    self.xp.random.randn(l, l_minus_1).astype(np.float32)
-                    * self.xp.sqrt(1 / l_minus_1)
+                        self.xp.random.randn(l, l_minus_1).astype(np.float32)
+                        * self.xp.sqrt(1 / l_minus_1)
                 ).astype(np.float32)
                 for l_minus_1, l in zip(layers[:-1], layers[1:])
             ]
@@ -58,7 +59,8 @@ class Network(object):
                 self.xp.sqrt(1.5 / sum(w.shape)).astype(np.float32)
                 for w in self.weights
             ]
-        cp.cuda.Stream.null.synchronize()
+        if useGpu:
+            cp.cuda.Stream.null.synchronize()
 
         self.__lossF = None
         self.__loss = None
@@ -110,8 +112,9 @@ class Network(object):
         newX[x >= 0] = 1
         newX[x < 0] = -1
         newX *= H
-
-        cp.cuda.Stream.null.synchronize()
+        #
+        # if self.xp == cp:
+        #     cp.cuda.Stream.null.synchronize()
         return newX
 
     def compile(
@@ -223,7 +226,8 @@ class Network(object):
             self.__lr.step()
 
             correct = self.evaluate(valX, valY, binarized=self.isBinarized)
-            cp.cuda.Stream.null.synchronize()
+            if self.useGpu:
+                cp.cuda.Stream.null.synchronize()
             acc = correct * 100.0 / n_test
             cost = sum(epochCost) / len(epochCost)
 
@@ -241,7 +245,8 @@ class Network(object):
                 best_weights = [w.copy() for w in self.weights]
                 if self.useBias:
                     best_biases = [b.copy() for b in self.biases]
-                cp.cuda.Stream.null.synchronize()
+                if self.useGpu:
+                    cp.cuda.Stream.null.synchronize()
 
         if save_best_params:
             print(
@@ -266,7 +271,8 @@ class Network(object):
             weights = self.weights
 
         delta_nabla_b, delta_nabla_w, cost = self.__backprop(x, y, weights, biases)
-        cp.cuda.Stream.null.synchronize()
+        if self.useGpu:
+            cp.cuda.Stream.null.synchronize()
         # matrix.sum(axis=0) => 3
         # matrix.sum(axis=1) => 6
         # [1,2,3]
@@ -281,7 +287,8 @@ class Network(object):
         if self.useBias:
             nabla_b = [nb.mean(axis=1, keepdims=True) for nb in delta_nabla_b]
         nabla_w = [(nw / m) for nw in delta_nabla_w]
-        cp.cuda.Stream.null.synchronize()
+        if self.useGpu:
+            cp.cuda.Stream.null.synchronize()
 
         self.weights = [w - (lr * nw) for w, nw in zip(self.weights, nabla_w)]
         if self.isBinarized:
@@ -289,7 +296,8 @@ class Network(object):
                 self.xp.clip(w, -h, h, out=w)
         if self.useBias:
             self.biases = [b - (lr * nb) for b, nb in zip(self.biases, nabla_b)]
-        cp.cuda.Stream.null.synchronize()
+        if self.useGpu:
+            cp.cuda.Stream.null.synchronize()
 
         return cost
 
@@ -310,10 +318,11 @@ class Network(object):
 
         # backward pass
         dLdA = self.__loss_derivative(activation, y)  # expected shape: k * n
-        cp.cuda.Stream.null.synchronize()
+        if self.useGpu:
+            cp.cuda.Stream.null.synchronize()
 
         if (self.__outAF == af.identity) or (
-            self.__outAF == af.softmax and self.__lossF == lf.cross_entropy
+                self.__outAF == af.softmax and self.__lossF == lf.cross_entropy
         ):
             delta = dLdA
         else:
@@ -321,17 +330,21 @@ class Network(object):
             delta = dLdA * dAdZ
         delta_nabla_b[-1] = delta
         delta_nabla_w[-1] = self.xp.dot(delta, activations[-2].T)
-        cp.cuda.Stream.null.synchronize()
+        if self.useGpu:
+            cp.cuda.Stream.null.synchronize()
 
         for l in range(2, self.num_layers + 1):
             z = zs[-l]
             dAprev = self.xp.dot(weights[-l + 1].T, delta)
-            cp.cuda.Stream.null.synchronize()
+            if self.useGpu:
+                cp.cuda.Stream.null.synchronize()
             delta = dAprev * self.__hiddenDerivative(z)
-            cp.cuda.Stream.null.synchronize()
+            if self.useGpu:
+                cp.cuda.Stream.null.synchronize()
             delta_nabla_b[-l] = delta
             delta_nabla_w[-l] = self.xp.dot(delta, activations[-l - 1].T)
-            cp.cuda.Stream.null.synchronize()
+            if self.useGpu:
+                cp.cuda.Stream.null.synchronize()
         return (delta_nabla_b, delta_nabla_w, cost)
 
     def __forwardpass(
@@ -345,7 +358,8 @@ class Network(object):
             z = self.xp.dot(w, a)
             if self.useBias:
                 z += b
-            cp.cuda.Stream.null.synchronize()
+            if self.useGpu:
+                cp.cuda.Stream.null.synchronize()
             zs.append(z)
             a = afunc(z)
             activations.append(a)
@@ -358,7 +372,8 @@ class Network(object):
             biases = self.biases
 
         _, _, yhat = self.__forwardpass(X, weights=weights, biases=biases)
-        cp.cuda.Stream.null.synchronize()
+        if self.useGpu:
+            cp.cuda.Stream.null.synchronize()
 
         preds = yhat.argmax(axis=0).reshape(-1, 1)
 
