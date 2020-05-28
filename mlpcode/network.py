@@ -433,7 +433,7 @@ class Network(object):
             batches = [(X, y)]
         else:
             batches = [
-                (X[k : k + batch_size, :], y[k : k + batch_size, :],)
+                (X[k : k + batch_size, :], y[k : k + batch_size],)
                 for k in range(0, n, batch_size)
             ]
 

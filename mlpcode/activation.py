@@ -10,8 +10,8 @@ def identity(x: ndarray):
     return x
 
 
-def identity_derivative(z: ndarray):
-    x = cp.get_array_module(z).ones_like(z)
+def identity_derivative(a: ndarray):
+    x = cp.get_array_module(a).ones_like(a)
     return x
 
 
@@ -24,7 +24,6 @@ def sigmoid(x: ndarray):
 
 
 def sigmoid_derivate(a: ndarray):
-    # a = sigmoid(z)
     x = a * (1 - a)
 
     return x
@@ -37,9 +36,8 @@ def tanh(x: ndarray):
     return a
 
 
-def tanh_derivative(z: ndarray):
-    xp = cp.get_array_module(z)
-    x = 1 - xp.tanh(z) ** 2
+def tanh_derivative(a: ndarray):
+    x = 1 - a ** 2
 
     return x
 
@@ -57,9 +55,9 @@ def softmax(x: ndarray):
 
 
 def softmax_derivative(a: ndarray):
-    # a = softmax(z)
-    x = a * (1 - a)
+    # TODO: Fix this
 
+    x = a * (1 - a)
     return x
 
 
@@ -70,11 +68,11 @@ def relu(x: ndarray):
     return a
 
 
-def relu_derivative(z: ndarray):
-    x = z.copy()
+def relu_derivative(a: ndarray):
+    x = a.copy()
 
-    x[z <= 0] = 0
-    x[z > 0] = 1
+    x[a <= 0] = 0
+    x[a > 0] = 1
 
     return x
 
@@ -86,11 +84,11 @@ def leaky_relu(x: ndarray):
     return a
 
 
-def leaky_relu_derivative(z: ndarray):
-    x = z.copy()
+def leaky_relu_derivative(a: ndarray):
+    x = a.copy()
 
-    x[z > 0] = 1
-    x[z <= 0] = RELU_EPSILON
+    x[a > 0] = 1
+    x[a <= 0] = RELU_EPSILON
 
     return x
 

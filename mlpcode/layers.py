@@ -38,7 +38,7 @@ class LinearLayer:
 
     def build(self):
         self.weights = (
-            self.xp.random.randn(self.layerUnits, self.inputUnits)
+            self.xp.random.randn(self.inputUnits, self.layerUnits)
             * self.xp.sqrt(1 / self.inputUnits)
         ).astype(np.float32)
         if self.useBias:
@@ -54,7 +54,7 @@ class LinearLayer:
         self.cache.clear()
         self.cache["input"] = X
 
-        z = self.xp.dot(X, weight)
+        z = X.dot(weight)
         if bias is not None:
             z += bias
         self.cache["z"] = z
@@ -81,25 +81,26 @@ class LinearLayer:
 
         return z
 
-    def backwards(self, dL: np.ndarray, lr: float, lossXEntr=False) -> np.ndarray:
+    def backwards(self, dA: np.ndarray, lr: float, activDeriv=True) -> np.ndarray:
         assert "input" in self.cache
         assert "z" in self.cache
 
-        delta = dL  # shape: (num_instances, self.layersUnits)
+        delta = dA  # shape: (self.layersUnits, num_instances)
         n = delta.shape[0]
-        if self.activation is not None:
+        if self.activation is not None and activDeriv:
             assert "a" in self.cache
-            if not (lossXEntr and self.activation in (af.sigmoid, af.softmax)):
-                delta = dL * self.afderiv(self.cache["a"])
+            delta = dA * self.afderiv(self.cache["a"])
 
         # batchnorm updates to delta
+        if self.batchNorm:
+            pass
 
-        dw = np.dot(self.cache["input"].T, delta)
-        dw /= n
+        dw = self.cache["input"].T.dot(delta)
+        # dw /= n
+
+        dlPrev = delta.dot(self.weights.T)
 
         self.weights -= lr * dw
-
-        dlPrev = np.dot(delta, self.weights.T)
 
         self.cache.clear()
         return dlPrev
@@ -153,13 +154,13 @@ class BinaryLayer(LinearLayer):
         return z
 
 
-def accuracy(trainX, trainY, layers):
-    a = trainX
+def accuracy(X, y, layers):
+    a = X
     for layer in layers:
         a = layer.forward(a)
 
     ypred = np.argmax(a, axis=1)
-    correct = (ypred == trainY.squeeze()).mean()
+    correct = (ypred == y.squeeze()).mean()
     return correct * 100.0
 
 
@@ -170,19 +171,23 @@ if __name__ == "__main__":
     from mlpcode.network import Network
 
     useGpu = False
-    lr = 1e-3
+    # lr = 1e-3
+    lr = 0.07
     loss = lf.cross_entropy
     lossF = LOSS_FUNCS[loss]
     lossDeriv = LOSS_DERIVATES[loss]
 
-    lossXEntr = loss == lf.cross_entropy
+    lossXEntr = loss == lf.mse
 
     dataset = DATASETS.mnist
-    trainX, trainY, testX, testY = loadDataset(dataset, useGpu=useGpu)
-    trainY = np.squeeze(trainY)
+    trainX, trainY, testX, testY = loadDataset(dataset, useGpu=useGpu, encoded=True)
+    testY = np.squeeze(testY)
 
-    l1 = LinearLayer(784, 256, activation=af.sigmoid, gpu=useGpu)
-    l2 = LinearLayer(256, 10, activation=af.softmax, gpu=useGpu)
+    valX = trainX.copy()
+    valY = trainY.argmax(axis=1)
+
+    l1 = LinearLayer(256, 784, activation=af.leaky_relu, gpu=useGpu)
+    l2 = LinearLayer(10, 256, activation=af.sigmoid, gpu=useGpu)
     layers = [l1, l2]
 
     for layer in layers:
@@ -196,15 +201,12 @@ if __name__ == "__main__":
                 a = layer.forward(a)
 
             err = lossF(a, batchY).mean()
-            # print("Error:\t{0:.02f}".format(err))
             epochLoss.append(err)
 
-            dl = lossDeriv(a, batchY)
+            da = lossDeriv(a, batchY)
 
             for layer in reversed(layers):
-                dl = layer.backwards(
-                    dl, lr, lossXEntr=lossXEntr and layer == layers[-1]
-                )
+                da = layer.backwards(da, lr)
 
         # print(sum(epochLoss) / len(epochLoss))
-        print(accuracy(testX, testY, layers))
+        print(accuracy(valX, valY, layers))

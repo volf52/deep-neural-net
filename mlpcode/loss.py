@@ -36,7 +36,7 @@ def cross_entropy_loss(ypred: cp.ndarray, y: cp.ndarray, eps=1e-15) -> cp.ndarra
     return L
 
 
-def cross_entropy_derivative(ypred: cp.ndarray, y: cp.ndarray) -> cp.ndarray:
+def cross_entropy_derivative(ypred: cp.ndarray, y: cp.ndarray, eps=1e-15) -> cp.ndarray:
     """
     Derivative for Mean Squared Error
 
@@ -45,7 +45,7 @@ def cross_entropy_derivative(ypred: cp.ndarray, y: cp.ndarray) -> cp.ndarray:
     ypred
         Numpy array with predicted labels, with shape (num_instances, num_classes) and dtype: float32
     y
-        Numpy array with predicted labels, with shape (num_instances, num_classes) and dtype: uint8
+        Numpy array with predicted labels, with shape (num_instances,) and dtype: uint8
 
     Returns
     -------
@@ -53,11 +53,12 @@ def cross_entropy_derivative(ypred: cp.ndarray, y: cp.ndarray) -> cp.ndarray:
         The derivative of cross_entropy_loss(ypred, y) with shape (num_instances, num_classes)
     """
 
-    # xp = cp.get_array_module(Y_hat)
-    # cost = -(xp.divide(Y, Y_hat) - xp.divide(1 - Y, 1 - Y_hat))
-    cost = ypred - y
+    xp = cp.get_array_module(ypred)
+    # xp.clip(ypred, eps, 1 - eps, out=ypred)
+    dA = -(xp.divide(y, ypred) - xp.divide(1 - y, 1 - ypred))
+    dA /= ypred.shape[0]
 
-    return cost
+    return dA
 
 
 def mse(ypred: cp.ndarray, y: cp.ndarray) -> cp.ndarray:
@@ -99,7 +100,7 @@ def mse_derivative(ypred: cp.ndarray, y: cp.ndarray) -> cp.ndarray:
         The derivative of mse(ypred, y) with shape (num_instances, num_classes)
     """
 
-    return ypred - y
+    return (ypred - y) / y.shape[0]
 
 
 def hinge_loss(ypred: cp.ndarray, y: cp.ndarray) -> cp.ndarray:
