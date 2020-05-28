@@ -89,7 +89,7 @@ class LinearLayer:
         n = delta.shape[0]
         if self.activation is not None and activDeriv:
             assert "a" in self.cache
-            delta = dA * self.afderiv(self.cache["a"])
+            delta = self.afderiv(dA, self.cache["a"])
 
         # batchnorm updates to delta
         if self.batchNorm:
@@ -177,8 +177,6 @@ if __name__ == "__main__":
     lossF = LOSS_FUNCS[loss]
     lossDeriv = LOSS_DERIVATES[loss]
 
-    lossXEntr = loss == lf.mse
-
     dataset = DATASETS.mnist
     trainX, trainY, testX, testY = loadDataset(dataset, useGpu=useGpu, encoded=True)
     testY = np.squeeze(testY)
@@ -187,8 +185,13 @@ if __name__ == "__main__":
     valY = trainY.argmax(axis=1)
 
     l1 = LinearLayer(256, 784, activation=af.leaky_relu, gpu=useGpu)
-    l2 = LinearLayer(10, 256, activation=af.sigmoid, gpu=useGpu)
+    l2 = LinearLayer(10, 256, activation=af.softmax, gpu=useGpu)
     layers = [l1, l2]
+
+    softCrossEntropy = loss == lf.cross_entropy and layers[-1].activation in (
+        af.softmax,
+        af.sigmoid,
+    )
 
     for layer in layers:
         layer.build()
@@ -203,10 +206,14 @@ if __name__ == "__main__":
             err = lossF(a, batchY).mean()
             epochLoss.append(err)
 
-            da = lossDeriv(a, batchY)
+            da = lossDeriv(a, batchY, with_softmax=softCrossEntropy)
+            da = layers[-1].backwards(da, lr, activDeriv=not softCrossEntropy)
 
-            for layer in reversed(layers):
+            for layer in reversed(layers[:-1]):
                 da = layer.backwards(da, lr)
 
         # print(sum(epochLoss) / len(epochLoss))
         print(accuracy(valX, valY, layers))
+
+    print("Test acc")
+    print(accuracy(testX, testY, layers))

@@ -16,7 +16,7 @@ def cross_entropy_loss(ypred: cp.ndarray, y: cp.ndarray, eps=1e-15) -> cp.ndarra
     ypred
         Numpy array with predicted labels, with shape (num_instances, num_classes) and dtype: float32
     y
-        Numpy array with predicted labels, with shape (num_instances, num_classes) and dtype: uint8
+        Numpy array with actual labels, with shape (num_instances, num_classes) and dtype: uint8
     eps
         Tolerance for datapoints near zero (to prevent instability with log)
 
@@ -36,7 +36,9 @@ def cross_entropy_loss(ypred: cp.ndarray, y: cp.ndarray, eps=1e-15) -> cp.ndarra
     return L
 
 
-def cross_entropy_derivative(ypred: cp.ndarray, y: cp.ndarray, eps=1e-15) -> cp.ndarray:
+def cross_entropy_derivative(
+    ypred: cp.ndarray, y: cp.ndarray, eps=1e-15, with_softmax=False
+) -> cp.ndarray:
     """
     Derivative for Mean Squared Error
 
@@ -45,7 +47,7 @@ def cross_entropy_derivative(ypred: cp.ndarray, y: cp.ndarray, eps=1e-15) -> cp.
     ypred
         Numpy array with predicted labels, with shape (num_instances, num_classes) and dtype: float32
     y
-        Numpy array with predicted labels, with shape (num_instances,) and dtype: uint8
+        Numpy array with true labels, with shape (num_instances, num_classes) and dtype: uint8
 
     Returns
     -------
@@ -53,9 +55,14 @@ def cross_entropy_derivative(ypred: cp.ndarray, y: cp.ndarray, eps=1e-15) -> cp.
         The derivative of cross_entropy_loss(ypred, y) with shape (num_instances, num_classes)
     """
 
-    xp = cp.get_array_module(ypred)
-    # xp.clip(ypred, eps, 1 - eps, out=ypred)
-    dA = -(xp.divide(y, ypred) - xp.divide(1 - y, 1 - ypred))
+    if with_softmax:
+        dA = ypred - y
+
+    else:
+        xp = cp.get_array_module(ypred)
+        xp.clip(ypred, eps, 1 - eps, out=ypred)
+        dA = -(xp.divide(y, ypred) - xp.divide(1 - y, 1 - ypred))
+
     dA /= ypred.shape[0]
 
     return dA
@@ -70,7 +77,7 @@ def mse(ypred: cp.ndarray, y: cp.ndarray) -> cp.ndarray:
     ypred
         Numpy array with predicted labels, with shape (num_instances, num_classes) and dtype: float32
     y
-        Numpy array with predicted labels, with shape (num_instances, num_classes) and dtype: uint8
+        Numpy array with true labels, with shape (num_instances, num_classes) and dtype: uint8
 
     Returns
     -------
@@ -83,7 +90,7 @@ def mse(ypred: cp.ndarray, y: cp.ndarray) -> cp.ndarray:
     return cost
 
 
-def mse_derivative(ypred: cp.ndarray, y: cp.ndarray) -> cp.ndarray:
+def mse_derivative(ypred: cp.ndarray, y: cp.ndarray, **kwargs) -> cp.ndarray:
     """
     Derivative for Mean Squared Error
 
@@ -92,7 +99,7 @@ def mse_derivative(ypred: cp.ndarray, y: cp.ndarray) -> cp.ndarray:
     ypred
         Numpy array with predicted labels, with shape (num_instances, num_classes) and dtype: float32
     y
-        Numpy array with predicted labels, with shape (num_instances, num_classes) and dtype: uint8
+        Numpy array with true labels, with shape (num_instances, num_classes) and dtype: uint8
 
     Returns
     -------
@@ -113,7 +120,7 @@ def hinge_loss(ypred: cp.ndarray, y: cp.ndarray) -> cp.ndarray:
     return loss.mean(axis=0)
 
 
-def hinge_derivative(ypred: cp.ndarray, y: cp.ndarray) -> cp.ndarray:
+def hinge_derivative(ypred: cp.ndarray, y: cp.ndarray, **kwargs) -> cp.ndarray:
     assert ypred.shape == y.shape
     assert y.ndim == 2
 
