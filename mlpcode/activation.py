@@ -5,14 +5,16 @@ from numpy import ndarray
 
 RELU_EPSILON = 0.01
 
+# TODO: Might have to change all a's to z's and use z from cache during backpropogation, for the hard_tanh part
+
 
 def identity(x: ndarray):
     return x
 
 
-def identity_derivative(z: ndarray):
-    x = cp.get_array_module(z).ones_like(z)
-    return x
+def identity_derivative(dA: ndarray, a: ndarray):
+    delta = dA.copy()
+    return delta
 
 
 def sigmoid(x: ndarray):
@@ -23,11 +25,10 @@ def sigmoid(x: ndarray):
     return a
 
 
-def sigmoid_derivate(z: ndarray):
-    a = sigmoid(z)
-    x = a * (1 - a)
-
-    return x
+def sigmoid_derivate(dA: ndarray, a: ndarray):
+    dZ = a * (1 - a)
+    delta = dA * dZ
+    return delta
 
 
 def tanh(x: ndarray):
@@ -37,30 +38,35 @@ def tanh(x: ndarray):
     return a
 
 
-def tanh_derivative(z: ndarray):
-    xp = cp.get_array_module(z)
-    x = 1 - xp.tanh(z) ** 2
-
-    return x
+def tanh_derivative(dA: ndarray, a: ndarray):
+    dZ = 1 - a ** 2
+    delta = dA * dZ
+    return delta
 
 
 def softmax(x: ndarray):
     xp = cp.get_array_module(x)
     # Subtracting the max to stabilise it (preventing ops with xp.Inf)
-    a = x - x.max(axis=0)[xp.newaxis, :]
+    a = x - x.max(axis=1)[:, xp.newaxis]
     xp.exp(a, out=a)
 
-    # Sum on axis 0 gives the number of classes
-    a /= a.sum(axis=0)[xp.newaxis, :]
+    # Sum on axis 1 the total per instance prediction
+    a /= a.sum(axis=1)[:, xp.newaxis]
 
     return a
 
 
-def softmax_derivative(z: ndarray):
-    a = softmax(z)
-    x = a * (1 - a)
+def softmax_derivative(dA: ndarray, a: ndarray):
+    xp = cp.get_array_module(a)
+    m, n = a.shape
+    a = softmax(a)
 
-    return x
+    tensor1 = xp.einsum("ij,ik->ijk", a, a)
+    tensor2 = xp.einsum("ij,jk->ijk", a, xp.eye(n, n))
+    dZ = tensor2 - tensor1
+
+    delta = xp.einsum("ijk,ik->ij", dZ, dA)
+    return delta
 
 
 def relu(x: ndarray):
@@ -70,13 +76,12 @@ def relu(x: ndarray):
     return a
 
 
-def relu_derivative(z: ndarray):
-    x = z.copy()
+def relu_derivative(dA: ndarray, a: ndarray):
+    delta = dA.copy()
 
-    x[z <= 0] = 0
-    x[z > 0] = 1
+    delta[a <= 0] = 0
 
-    return x
+    return delta
 
 
 def leaky_relu(x: ndarray):
@@ -86,13 +91,12 @@ def leaky_relu(x: ndarray):
     return a
 
 
-def leaky_relu_derivative(z: ndarray):
-    x = z.copy()
+def leaky_relu_derivative(dA: ndarray, a: ndarray):
+    delta = dA.copy()
 
-    x[z > 0] = 1
-    x[z <= 0] = RELU_EPSILON
+    delta[a <= 0] *= RELU_EPSILON
 
-    return x
+    return delta
 
 
 def hard_sigmoid(x: ndarray):
@@ -112,12 +116,12 @@ def unitstep(x: ndarray):
     return a
 
 
-def hard_tanh(z: ndarray):
+def hard_tanh(dA: ndarray, a: ndarray):
     # equivalent to max(-1, min(z, 1))
-    a = z.clip(-1, 1)
+    a = a.clip(-1, 1)
     # No need for the hard_sigmoid thing. Same as clip
-
-    return a
+    dZ = a * dA
+    return dZ
 
 
 class ActivationFuncs(Enum):
