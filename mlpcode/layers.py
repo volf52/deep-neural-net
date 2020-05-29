@@ -49,7 +49,7 @@ class LinearLayer:
         self.isBuilt = True
 
     def _forward(
-        self, X: np.ndarray, weight: np.ndarray, bias: np.ndarray, train=True
+        self, X: np.ndarray, weight: np.ndarray, bias: np.ndarray, cache=True
     ) -> np.ndarray:
         self.cache.clear()
         self.cache["input"] = X
@@ -69,15 +69,15 @@ class LinearLayer:
             z = self.af(z)
             self.cache["a"] = z
 
-        if not train:
+        if not cache:
             self.cache.clear()
 
         return z
 
-    def forward(self, X: np.ndarray) -> np.ndarray:
+    def forward(self, X: np.ndarray, cache=True) -> np.ndarray:
         assert self.isBuilt
 
-        z = self._forward(X, self.weights, self.bias)
+        z = self._forward(X, self.weights, self.bias, cache=cache)
 
         return z
 
@@ -142,7 +142,7 @@ class BinaryLayer(LinearLayer):
 
         return newX
 
-    def forward(self, X: np.ndarray) -> np.ndarray:
+    def forward(self, X: np.ndarray, cache=True) -> np.ndarray:
         assert self.isBuilt
 
         weight = self.binarize(self.weights, H=self.H)
@@ -150,14 +150,14 @@ class BinaryLayer(LinearLayer):
         if self.bias is not None:
             bias = self.binarize(self.bias, H=self.H)
 
-        z = self._forward(X, weight, bias)
+        z = self._forward(X, weight, bias, cache=cache)
         return z
 
 
 def accuracy(X, y, layers):
     a = X
     for layer in layers:
-        a = layer.forward(a)
+        a = layer.forward(a, cache=False)
 
     ypred = np.argmax(a, axis=1)
     correct = (ypred == y.squeeze()).mean()
@@ -170,9 +170,9 @@ if __name__ == "__main__":
     from mlpcode.loss import LOSS_FUNCS, LOSS_DERIVATES
     from mlpcode.network import Network
 
-    useGpu = False
-    # lr = 1e-3
-    lr = 0.07
+    useGpu = True
+    lr = 1e-3
+    # lr = 0.07
     loss = lf.cross_entropy
     lossF = LOSS_FUNCS[loss]
     lossDeriv = LOSS_DERIVATES[loss]
@@ -184,8 +184,8 @@ if __name__ == "__main__":
     valX = trainX.copy()
     valY = trainY.argmax(axis=1)
 
-    l1 = LinearLayer(256, 784, activation=af.leaky_relu, gpu=useGpu)
-    l2 = LinearLayer(10, 256, activation=af.softmax, gpu=useGpu)
+    l1 = LinearLayer(512, 784, activation=af.leaky_relu, gpu=useGpu)
+    l2 = LinearLayer(10, 512, activation=af.softmax, gpu=useGpu)
     layers = [l1, l2]
 
     softCrossEntropy = loss == lf.cross_entropy and layers[-1].activation in (
@@ -198,7 +198,7 @@ if __name__ == "__main__":
 
     for epoch in range(100):
         epochLoss = []
-        for batchX, batchY in Network.get_batches(trainX, trainY, 600, trainX.shape[0]):
+        for batchX, batchY in Network.get_batches(trainX, trainY, 100, trainX.shape[0]):
             a = batchX
             for layer in layers:
                 a = layer.forward(a)
