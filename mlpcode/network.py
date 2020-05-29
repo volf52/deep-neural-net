@@ -20,7 +20,7 @@ ModelLayer = Union[LinearLayer, BinaryLayer]
 
 class Network(object):
     def __init__(
-            self, units: List[int], useGpu=False, binarized=False, useBias=False,
+        self, units: List[int], useGpu=False, binarized=False, useBias=False,
     ):
 
         if useGpu:
@@ -97,11 +97,11 @@ class Network(object):
         return nn
 
     def compile(
-            self,
-            lr: Union[LRScheduler, float] = 1e-3,
-            hiddenAf: af = af.sigmoid,
-            outAf: af = af.softmax,
-            lossF: lf = lf.cross_entropy,
+        self,
+        lr: Union[LRScheduler, float] = 1e-3,
+        hiddenAf: af = af.sigmoid,
+        outAf: af = af.softmax,
+        lossF: lf = lf.cross_entropy,
     ) -> None:
 
         assert hiddenAf in ACTIVATION_FUNCTIONS
@@ -310,7 +310,7 @@ class Network(object):
             batches = [(X, y)]
         else:
             batches = (
-                (X[k: k + batch_size], y[k: k + batch_size])
+                (X[k : k + batch_size], y[k : k + batch_size])
                 for k in range(0, n, batch_size)
             )
 

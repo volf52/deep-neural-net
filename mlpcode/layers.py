@@ -50,8 +50,8 @@ class LinearLayer:
     def build(self, activation: af = None):
         if self.weights is None:
             self.weights = (
-                    self.xp.random.randn(self.inputUnits, self.layerUnits)
-                    * self.xp.sqrt(1 / self.inputUnits)
+                self.xp.random.randn(self.inputUnits, self.layerUnits)
+                * self.xp.sqrt(1 / self.inputUnits)
             ).astype(np.float32)
         if self.useBias and self.bias is None:
             self.bias = self.xp.random.randn(self.layerUnits, 1).astype(np.float32)
@@ -126,10 +126,10 @@ class BinaryLayer(LinearLayer):
     def __init__(
         self,
         layerUnits: int,
-            inputUnits: int,
-            useBias=False,
-            gpu=False,
-            batchNorm=False,
+        inputUnits: int,
+        useBias=False,
+        gpu=False,
+        batchNorm=False,
     ):
         super(BinaryLayer, self).__init__(
             layerUnits, inputUnits, useBias=useBias, gpu=gpu, batchNorm=batchNorm,
