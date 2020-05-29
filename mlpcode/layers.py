@@ -5,7 +5,76 @@ from mlpcode.activation import ACTIVATION_FUNCTIONS, ACTIVATION_DERIVATIVES
 from mlpcode.activation import ActivationFuncs as af
 
 
-class LinearLayer:
+class Layer:
+    def __init__(self, layerUnits: int, gpu=False):
+        self.layerUnits = layerUnits
+        if gpu:
+            self.xp = cp
+        else:
+            self.xp = np
+
+        self.gpu = gpu
+        self.layerUnits = layerUnits
+        self.cache = {}
+        self.isBuilt = False
+
+    def build(self):
+        self.isBuilt = True
+
+
+class BatchNormLayer(Layer):
+    EPSILON = 1e-2
+
+    def __init__(self, layerUnits: int, gpu=False):
+        super(BatchNormLayer, self).__init__(layerUnits, gpu=gpu)
+        self.beta = None
+        self.gamma = None
+
+    @property
+    def parameter_shape(self):
+        return (self.layerUnits,)
+
+    @property
+    def batchNormParams(self):
+        return (self.gamma, self.beta)
+
+    def loadBatchNormParams(self, gamma: np.ndarray, beta: np.ndarray):
+        raise NotImplementedError()
+
+    def build(self):
+        self.beta = self.xp.random.randn(self.layerUnits).astype(np.float32)
+        self.gamma = self.xp.random.randn(self.layerUnits).astype(np.float32)
+        super(BatchNormLayer, self).build()
+
+    def forward(self, z: np.ndarray, isTrain=True) -> np.ndarray:
+        # May add moving average later
+        assert self.isBuilt
+
+        self.cache.clear()
+        self.cache["input"] = z
+
+        mu = z.mean()
+        sigma = self.xp.sqrt(z.var() + self.EPSILON)
+
+        zNorm = (z - mu) / sigma
+
+        ztilde = self.beta * zNorm + self.gamma
+
+        self.cache["output"] = ztilde
+
+        if not isTrain:
+            self.cache.clear()
+
+        # return ztilde
+        return z
+
+    def backwards(self, delta: np.ndarray):
+
+        self.cache.clear()
+        return delta
+
+
+class LinearLayer(Layer):
     def __init__(
         self,
         layerUnits: int,
@@ -14,21 +83,17 @@ class LinearLayer:
         gpu=False,
         batchNorm=False,
     ):
-        if gpu:
-            self.xp = cp
-        else:
-            self.xp = np
+        super(LinearLayer, self).__init__(layerUnits, gpu=gpu)
 
-        self.gpu = gpu
-        self.layerUnits = layerUnits
         self.inputUnits = inputUnits
         self.useBias = useBias
         self.weights = None
         self.bias = None
         self.activation = None
         self.batchNorm = batchNorm
-        self.cache = {}
-        self.isBuilt = False
+
+        if batchNorm:
+            self.batchNormLayer = BatchNormLayer(layerUnits, gpu=gpu)
 
     @property
     def weights_shape(self):
@@ -38,7 +103,12 @@ class LinearLayer:
     def bias_shape(self):
         return (self.layerUnits,)
 
-    def load_weights(self, weights: np.ndarray, bias: np.ndarray = None):
+    @property
+    def batchNormParams(self):
+        assert self.batchNorm
+        return self.batchNormLayer.batchNormParams
+
+    def load_parameters(self, weights: np.ndarray, bias: np.ndarray = None):
         assert weights.shape == self.weights_shape
         self.weights = weights
 
@@ -46,6 +116,11 @@ class LinearLayer:
             assert bias is not None
             assert bias.shape == self.bias_shape
             self.bias = bias
+
+    def loadBatchNormParams(self, gamma: np.ndarray, beta: np.ndarray):
+        assert self.batchNorm
+
+        self.batchNormLayer.load_parameters(gamma, beta)
 
     def build(self, activation: af = None):
         if self.weights is None:
@@ -62,10 +137,13 @@ class LinearLayer:
         if activation is not None:
             assert activation in ACTIVATION_FUNCTIONS
 
-        self.isBuilt = True
+        if self.batchNorm:
+            self.batchNormLayer.build()
+
+        super(LinearLayer, self).build()
 
     def _forward(
-        self, X: np.ndarray, weight: np.ndarray, bias: np.ndarray, cache=True
+        self, X: np.ndarray, weight: np.ndarray, bias: np.ndarray, isTrain=True
     ) -> np.ndarray:
         self.cache.clear()
         self.cache["input"] = X
@@ -73,27 +151,27 @@ class LinearLayer:
         z = X.dot(weight)
         if bias is not None:
             z += bias
-        self.cache["z"] = z
 
         if self.gpu:
             cp.cuda.Stream.null.synchronize()
 
         if self.batchNorm:
-            pass
+            z = self.batchNormLayer.forward(z, isTrain=isTrain)
 
+        self.cache["z"] = z
         if self.activation is not None:
             z = ACTIVATION_FUNCTIONS[self.activation](z)
             self.cache["a"] = z
 
-        if not cache:
+        if not isTrain:
             self.cache.clear()
 
         return z
 
-    def forward(self, X: np.ndarray, cache=True) -> np.ndarray:
+    def forward(self, X: np.ndarray, isTrain=True) -> np.ndarray:
         assert self.isBuilt
 
-        z = self._forward(X, self.weights, self.bias, cache=cache)
+        z = self._forward(X, self.weights, self.bias, isTrain=isTrain)
 
         return z
 
@@ -109,7 +187,7 @@ class LinearLayer:
 
         # batchnorm updates to delta
         if self.batchNorm:
-            pass
+            delta = self.batchNormLayer.backwards(delta)
 
         dw = self.cache["input"].T.dot(delta)
         # dw /= n
@@ -137,10 +215,10 @@ class BinaryLayer(LinearLayer):
         self.H = None
 
     def build(self, activation: af = None):
-        super(BinaryLayer, self).build(activation)
         self.H = self.xp.sqrt(1.5 / (self.layerUnits + self.inputUnits)).astype(
             np.float32
         )
+        super(BinaryLayer, self).build(activation)
 
     @staticmethod
     def binarize(x: np.ndarray, H=1.0) -> np.ndarray:
@@ -151,7 +229,7 @@ class BinaryLayer(LinearLayer):
 
         return newX
 
-    def forward(self, X: np.ndarray, cache=True) -> np.ndarray:
+    def forward(self, X: np.ndarray, isTrain=True) -> np.ndarray:
         assert self.isBuilt
 
         weight = self.binarize(self.weights, H=self.H)
@@ -159,5 +237,12 @@ class BinaryLayer(LinearLayer):
         if self.bias is not None:
             bias = self.binarize(self.bias, H=self.H)
 
-        z = self._forward(X, weight, bias, cache=cache)
+        z = self._forward(X, weight, bias, isTrain=isTrain)
         return z
+
+
+if __name__ == "__main__":
+    z = np.random.randn(10, 10)
+    layer = BatchNormLayer(10)
+    layer.build()
+    print(layer.forward(z))

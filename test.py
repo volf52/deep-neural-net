@@ -15,7 +15,7 @@ trainX, trainY, testX, testY = loadDataset(dataset, useGpu=useGpu)
 print("Finished loading {} data".format(dataset))
 
 layers = [trainX.shape[1], 512, 10]
-epochs = 50
+epochs = 5
 batchSize = 100
 lr = 0.001
 # lr = 0.07
@@ -23,12 +23,12 @@ lr = LRScheduler(alpha=0.07, decay_rate=(0.07 - 1e-4) ** (1 / epochs), strategy=
 
 print("\nCreating neural net")
 # Creating from scratch
-# nn = Network(layers, useGpu=useGpu, binarized=binarized, useBias=True)
+nn = Network(layers, useGpu=useGpu, binarized=binarized, useBias=True, batchNorm=True)
 
 # Creating from a pretrained model
-modelPath = MODELDIR / "mnist_1590770375.122536.hdf5"
-assert modelPath.exists()
-nn = Network.fromModel(modelPath, useGpu=useGpu, binarized=binarized, useBias=True)
+# modelPath = MODELDIR / "mnist_1590770375.122536.hdf5"
+# assert modelPath.exists()
+# nn = Network.fromModel(modelPath, useGpu=useGpu, binarized=binarized, useBias=True, )
 
 # Must compile the model before trying to train it
 nn.compile(lr=lr, hiddenAf=af.leaky_relu, outAf=af.softmax, lossF=lf.cross_entropy)
@@ -38,7 +38,7 @@ nn.train(trainX, trainY, epochs, batch_size=batchSize, save_best_params=True)
 
 # Save will be called separately if we want to save the model
 # Set binarized to true if you want to save the binary version of the weights
-# nn.save_weights(modelName=str(dataset), binarized=False)
+nn.save_weights(modelName=str(dataset), binarized=False)
 
 correct = nn.evaluate(testX, testY, batch_size=batchSize)
 acc = correct / testX.shape[0] * 100.0
