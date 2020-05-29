@@ -1,18 +1,18 @@
+import h5py
 from datetime import datetime
 from pathlib import Path
-from typing import List, Union, Tuple
+from typing import List, Union
 
 import cupy as cp
 import numpy as np
 
-from mlpcode.activation import ACTIVATION_DERIVATIVES, ACTIVATION_FUNCTIONS
+from mlpcode.activation import ACTIVATION_FUNCTIONS
 from mlpcode.activation import ActivationFuncs as af
+from mlpcode.layers import BinaryLayer, LinearLayer
 from mlpcode.loss import LOSS_DERIVATES, LOSS_FUNCS
 from mlpcode.loss import LossFuncs as lf
 from mlpcode.optim import LRScheduler
 from mlpcode.utils import MODELDIR, XY_DATA
-
-from mlpcode.layers import BinaryLayer, LinearLayer
 
 ArrayList = List[np.ndarray]
 ModelLayer = Union[LinearLayer, BinaryLayer]
@@ -57,12 +57,16 @@ class Network(object):
 
     @property
     def biases(self):
-        return [l.bias for l in self._layers]
+        if self.useBias:
+            return [l.bias for l in self._layers]
+        else:
+            return [None for _ in self.unitList[:-1]]
 
     def load_weights(self, weights: ArrayList, biases: ArrayList = None):
         if not self.useBias:
             biases = [None for _ in weights]
 
+        assert len(weights) == len(self._layers)
         assert len(biases) == len(weights)
 
         for layer, w, b in zip(self._layers, weights, biases):
@@ -72,27 +76,30 @@ class Network(object):
     def fromModel(filePth: Path, useGpu=False, binarized=False, useBias=False):
         assert filePth.exists()
         print(f"\nLoading model from {filePth}\n")
-        nn = Network([], useGpu=useGpu, binarized=binarized, useBias=useBias)
-        # If the file was saved using cupy, it would convert the weights (and biases)
-        # list to an object array, so allow_pickle and subsequent conversion is for that
-        with nn.xp.load(filePth, allow_pickle=True) as fp:
-            # If the file has been loaded using cupy, there is an extra layer to go through
-            if hasattr(fp, "files"):
-                npzfile = fp
-            else:
-                npzfile = fp.npz_file
-            # Weights, biases and units
-            keyArr = npzfile.files
-            assert len(keyArr) == 3
-            # Conversion done for the same reason allow_pickle is used above
 
-            weights = [nn.xp.array(x, dtype=np.float32) for x in npzfile[keyArr[0]]]
-            biases = [nn.xp.array(x, dtype=np.float32) for x in npzfile[keyArr[1]]]
-            units = list(map(int, npzfile[keyArr[2]]))
-            nn._layers = nn.__unitsToLayers(units)
+        with h5py.File(filePth, "r") as fp:
+            fpKeys = fp.keys()
+            assert "units" in fpKeys
+            assert "weights" in fpKeys
+            assert "useBias" in fpKeys
 
-            for layer, w, b in zip(nn._layers, weights, biases):
-                layer.load_weights(w, b)
+            unitList = list(map(int, fp["units"][()]))
+
+            nn = Network(unitList, useGpu=useGpu, useBias=useBias, binarized=binarized)
+            weights = []
+            biases = []
+            ws = fp["weights"]
+            for w in ws.values():
+                weights.append(nn.xp.array(w[()], dtype=np.float32))
+
+            if useBias:
+                assert fp["useBias"]
+                assert "biases" in fpKeys
+                bs = fp["biases"]
+                for b in bs.values():
+                    biases.append(nn.xp.array(b[()], dtype=np.float32))
+
+            nn.load_weights(weights, biases)
 
         return nn
 
@@ -146,7 +153,7 @@ class Network(object):
             print("\nEXCEPTION: Must compile the model before running train")
             return
 
-        best_weights: ArrayList = [0 for _ in self._layers]
+        best_weights: ArrayList = [None for _ in self._layers]
         best_biases: ArrayList = best_weights[:]
         best_accuracy = -1.0
 
@@ -280,29 +287,28 @@ class Network(object):
         return acc
 
     def save_weights(self, modelName: str, binarized=False):
-        raise NotImplementedError("Give me some time")
         fName = f"{modelName}_{datetime.utcnow().timestamp()}"
 
         if binarized:
             fName += "_binarized"
-        filePth = MODELDIR / fName
 
-        biases = self.biases
-        if binarized:
-            weights = (self.binarize(w, H=h) for w, h in zip(self.weights, self.H))
+        filePth = MODELDIR / f"{fName}.hdf5"
+
+        with h5py.File(filePth, "w") as fp:
+            fp.create_dataset("units", data=np.array(self.unitList, dtype=np.uint32))
+            fp.create_dataset("useBias", data=self.useBias)
+            ws = fp.create_group("weights")
+            for i, w in enumerate(self.weights):
+                ws.create_dataset(f"weights_{i}", data=cp.asnumpy(w), dtype=np.float32)
+
             if self.useBias:
-                biases = (self.binarize(b, H=h) for b, h in zip(self.biases, self.H))
-        else:
-            weights = self.weights
+                bs = fp.create_group("biases")
+                for i, b in enumerate(self.biases):
+                    bs.create_dataset(
+                        f"biases_{i}", data=cp.asnumpy(b), dtype=np.float32
+                    )
 
-        if not self.useBias:
-            biases = [0 for _ in biases]
-
-        weights_to_save = [cp.asnumpy(w) for w in weights]
-        biases_to_save = [cp.asnumpy(b) for b in biases]
-        print(f"Saving model to {filePth}.npz")
-
-        self.xp.savez(filePth, weights_to_save, biases_to_save, self.unitList)
+        print(f"Saving model to {filePth}")
 
     @staticmethod
     def get_batches(X: np.ndarray, y: np.ndarray, batch_size: int, n: int):

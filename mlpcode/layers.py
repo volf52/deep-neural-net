@@ -54,7 +54,7 @@ class LinearLayer:
                 * self.xp.sqrt(1 / self.inputUnits)
             ).astype(np.float32)
         if self.useBias and self.bias is None:
-            self.bias = self.xp.random.randn(self.layerUnits, 1).astype(np.float32)
+            self.bias = self.xp.random.randn(self.layerUnits).astype(np.float32)
         if self.gpu:
             cp.cuda.Stream.null.synchronize()
 
@@ -161,69 +161,3 @@ class BinaryLayer(LinearLayer):
 
         z = self._forward(X, weight, bias, cache=cache)
         return z
-
-
-def accuracy(X, y, layers):
-    a = X
-    for layer in layers:
-        a = layer.forward(a, cache=False)
-
-    ypred = np.argmax(a, axis=1)
-    correct = (ypred == y.squeeze()).mean()
-    return correct * 100.0
-
-
-if __name__ == "__main__":
-    from mlpcode.utils import loadDataset, DATASETS
-    from mlpcode.loss import LossFuncs as lf
-    from mlpcode.loss import LOSS_FUNCS, LOSS_DERIVATES
-    from mlpcode.network import Network
-
-    useGpu = True
-    lr = 1e-3
-    lr = 0.07
-    loss = lf.cross_entropy
-    lossF = LOSS_FUNCS[loss]
-    lossDeriv = LOSS_DERIVATES[loss]
-
-    dataset = DATASETS.mnist
-    trainX, trainY, testX, testY = loadDataset(dataset, useGpu=useGpu, encoded=True)
-    # testY = np.squeeze(testY)
-
-    valX = trainX.copy()
-    valY = trainY.argmax(axis=1)
-
-    l1 = LinearLayer(512, 784, gpu=useGpu)
-    l2 = LinearLayer(10, 512, gpu=useGpu)
-
-    l1.build(af.leaky_relu)
-    l2.build(af.softmax)
-
-    layers = [l1, l2]
-
-    softCrossEntropy = loss == lf.cross_entropy and layers[-1].activation in (
-        af.softmax,
-        af.sigmoid,
-    )
-
-    for epoch in range(100):
-        epochLoss = []
-        for batchX, batchY in Network.get_batches(trainX, trainY, 100, trainX.shape[0]):
-            a = batchX
-            for layer in layers:
-                a = layer.forward(a)
-
-            err = lossF(a, batchY).mean()
-            epochLoss.append(err)
-
-            da = lossDeriv(a, batchY, with_softmax=softCrossEntropy)
-            da = layers[-1].backwards(da, lr, activDeriv=not softCrossEntropy)
-
-            for layer in reversed(layers[:-1]):
-                da = layer.backwards(da, lr)
-
-        # print(sum(epochLoss) / len(epochLoss))
-        print(accuracy(valX, valY, layers))
-
-    print("Test acc")
-    print(accuracy(testX, testY, layers))
