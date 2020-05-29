@@ -2,7 +2,7 @@ from mlpcode.activation import ActivationFuncs as af
 from mlpcode.loss import LossFuncs as lf
 from mlpcode.network import Network
 from mlpcode.optim import LRScheduler, LRSchedulerStrat as LRS
-from mlpcode.utils import DATASETS, loadDataset
+from mlpcode.utils import DATASETS, loadDataset, MODELDIR
 
 useGpu = True
 binarized = False
@@ -15,20 +15,20 @@ trainX, trainY, testX, testY = loadDataset(dataset, useGpu=useGpu)
 print("Finished loading {} data".format(dataset))
 
 layers = [trainX.shape[1], 512, 10]
-epochs = 100
-batchSize = 600
+epochs = 50
+batchSize = 100
 lr = 0.001
 # lr = 0.07
 lr = LRScheduler(alpha=0.07, decay_rate=(0.07 - 1e-4) ** (1 / epochs), strategy=LRS.exp)
 
 print("\nCreating neural net")
 # Creating from scratch
-nn = Network(layers, useGpu=useGpu, binarized=binarized, useBias=False)
+# nn = Network(layers, useGpu=useGpu, binarized=binarized, useBias=True)
 
 # Creating from a pretrained model
-# modelPath = MODELDIR / "mnist_1589624361.944349.npz"
-# assert modelPath.exists()
-# nn = Network.fromModel(modelPath, useGpu=useGpu, binarized=binarized)
+modelPath = MODELDIR / "mnist_1590770375.122536.hdf5"
+assert modelPath.exists()
+nn = Network.fromModel(modelPath, useGpu=useGpu, binarized=binarized, useBias=True)
 
 # Must compile the model before trying to train it
 nn.compile(lr=lr, hiddenAf=af.leaky_relu, outAf=af.softmax, lossF=lf.cross_entropy)
