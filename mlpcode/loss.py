@@ -117,7 +117,7 @@ def hinge_loss(ypred: cp.ndarray, y: cp.ndarray) -> cp.ndarray:
     loss = 1 - ypred * y
     xp.maximum(0, loss, out=loss)
 
-    return loss.mean(axis=0)
+    return loss.sum(axis=1)
 
 
 def hinge_derivative(ypred: cp.ndarray, y: cp.ndarray, **kwargs) -> cp.ndarray:
@@ -131,31 +131,10 @@ def hinge_derivative(ypred: cp.ndarray, y: cp.ndarray, **kwargs) -> cp.ndarray:
     return grad
 
 
-# def squared_hinge_loss(ypred: cp.ndarray, y: cp.ndarray):
-#     assert ypred.shape == y.shape
-#
-#     xp = cp.get_array_module(ypred)
-#     loss = 1 - ypred * y
-#     loss[loss < 0] = 0
-#     xp.square(loss, out=loss)
-#
-#     return loss.mean(axis=0)
-
-
-# def squared_hinge_derivative(ypred: cp.ndarray, y: cp.ndarray):
-#     assert ypred.shape == y.shape
-#     assert y.ndim == 2
-#
-#     grad = 2 * hinge_derivative(ypred, y)
-#
-#     return grad
-
-
 class LossFuncs(Enum):
     cross_entropy = "cross_entropy"
     mse = "mse"
     hinge = "hinge"
-    # sq_hinge = "squared_hinge"
 
     def __repr__(self):
         return self.value
@@ -168,12 +147,10 @@ LOSS_FUNCS = {
     LossFuncs.cross_entropy: cross_entropy_loss,
     LossFuncs.mse: mse,
     LossFuncs.hinge: hinge_loss,
-    # LossFuncs.sq_hinge: squared_hinge_loss,
 }
 
 LOSS_DERIVATES = {
     LossFuncs.cross_entropy: cross_entropy_derivative,
     LossFuncs.mse: mse_derivative,
     LossFuncs.hinge: hinge_derivative,
-    # LossFuncs.sq_hinge: squared_hinge_derivative,
 }

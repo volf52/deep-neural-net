@@ -10,7 +10,6 @@ class LinearLayer:
         self,
         layerUnits: int,
         inputUnits: int,
-        activation: af = None,
         useBias=False,
         gpu=False,
         batchNorm=False,
@@ -24,27 +23,44 @@ class LinearLayer:
         self.layerUnits = layerUnits
         self.inputUnits = inputUnits
         self.useBias = useBias
-        self.activation = activation
         self.weights = None
         self.bias = None
+        self.activation = None
         self.batchNorm = batchNorm
         self.cache = {}
         self.isBuilt = False
 
-        if activation is not None:
-            assert activation in ACTIVATION_FUNCTIONS
-            self.af = ACTIVATION_FUNCTIONS[activation]
-            self.afderiv = ACTIVATION_DERIVATIVES[activation]
+    @property
+    def weights_shape(self):
+        return self.inputUnits, self.layerUnits
 
-    def build(self):
-        self.weights = (
-            self.xp.random.randn(self.inputUnits, self.layerUnits)
-            * self.xp.sqrt(1 / self.inputUnits)
-        ).astype(np.float32)
+    @property
+    def bias_shape(self):
+        return (self.layerUnits,)
+
+    def load_weights(self, weights: np.ndarray, bias: np.ndarray = None):
+        assert weights.shape == self.weights_shape
+        self.weights = weights
+
         if self.useBias:
+            assert bias is not None
+            assert bias.shape == self.bias_shape
+            self.bias = bias
+
+    def build(self, activation: af = None):
+        if self.weights is None:
+            self.weights = (
+                    self.xp.random.randn(self.inputUnits, self.layerUnits)
+                    * self.xp.sqrt(1 / self.inputUnits)
+            ).astype(np.float32)
+        if self.useBias and self.bias is None:
             self.bias = self.xp.random.randn(self.layerUnits, 1).astype(np.float32)
         if self.gpu:
             cp.cuda.Stream.null.synchronize()
+
+        self.activation = activation
+        if activation is not None:
+            assert activation in ACTIVATION_FUNCTIONS
 
         self.isBuilt = True
 
@@ -66,7 +82,7 @@ class LinearLayer:
             pass
 
         if self.activation is not None:
-            z = self.af(z)
+            z = ACTIVATION_FUNCTIONS[self.activation](z)
             self.cache["a"] = z
 
         if not cache:
@@ -89,7 +105,7 @@ class LinearLayer:
         n = delta.shape[0]
         if self.activation is not None and activDeriv:
             assert "a" in self.cache
-            delta = self.afderiv(dA, self.cache["a"])
+            delta = ACTIVATION_DERIVATIVES[self.activation](dA, self.cache["a"])
 
         # batchnorm updates to delta
         if self.batchNorm:
@@ -110,25 +126,18 @@ class BinaryLayer(LinearLayer):
     def __init__(
         self,
         layerUnits: int,
-        inputUnits: int,
-        activation: af = None,
-        useBias=False,
-        gpu=False,
-        batchNorm=False,
+            inputUnits: int,
+            useBias=False,
+            gpu=False,
+            batchNorm=False,
     ):
-        assert activation in (None, af.sign, af.identity)
         super(BinaryLayer, self).__init__(
-            layerUnits,
-            inputUnits,
-            activation=activation,
-            useBias=useBias,
-            gpu=gpu,
-            batchNorm=batchNorm,
+            layerUnits, inputUnits, useBias=useBias, gpu=gpu, batchNorm=batchNorm,
         )
         self.H = None
 
-    def build(self):
-        super(BinaryLayer, self).build()
+    def build(self, activation: af = None):
+        super(BinaryLayer, self).build(activation)
         self.H = self.xp.sqrt(1.5 / (self.layerUnits + self.inputUnits)).astype(
             np.float32
         )
@@ -172,29 +181,30 @@ if __name__ == "__main__":
 
     useGpu = True
     lr = 1e-3
-    # lr = 0.07
+    lr = 0.07
     loss = lf.cross_entropy
     lossF = LOSS_FUNCS[loss]
     lossDeriv = LOSS_DERIVATES[loss]
 
     dataset = DATASETS.mnist
     trainX, trainY, testX, testY = loadDataset(dataset, useGpu=useGpu, encoded=True)
-    testY = np.squeeze(testY)
+    # testY = np.squeeze(testY)
 
     valX = trainX.copy()
     valY = trainY.argmax(axis=1)
 
-    l1 = LinearLayer(512, 784, activation=af.leaky_relu, gpu=useGpu)
-    l2 = LinearLayer(10, 512, activation=af.softmax, gpu=useGpu)
+    l1 = LinearLayer(512, 784, gpu=useGpu)
+    l2 = LinearLayer(10, 512, gpu=useGpu)
+
+    l1.build(af.leaky_relu)
+    l2.build(af.softmax)
+
     layers = [l1, l2]
 
     softCrossEntropy = loss == lf.cross_entropy and layers[-1].activation in (
         af.softmax,
         af.sigmoid,
     )
-
-    for layer in layers:
-        layer.build()
 
     for epoch in range(100):
         epochLoss = []

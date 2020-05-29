@@ -159,9 +159,9 @@ def split_train_valid(
     TRAIN_TEST_DATA
         A 4-element tuple of numpy arrays (trainX, trainY, valX, valY) |
         trainX: Shape = (train_instances, features), dtype = np.float32 |
-        trainY: Shape = (train_instances, num_classes or 1), dtype = np.uint8 |
+        trainY: Shape = (train_instances, num_classes or None), dtype = np.int8 |
         valX: Shape = (val_instances, features), dtype = np.float32 |
-        valY: Shape = (val_instances, 1), dtype = np.uint8
+        valY: Shape = (val_instances, None), dtype = np.int8
     """
 
     pass
@@ -213,7 +213,7 @@ def loadIdxFile(file_pth: Path, isTest: bool, useGpu=True) -> np.ndarray:
     return data
 
 
-def loadNpyFile(file_pth: Path, isTest: bool, useGpu=True) -> np.ndarray:
+def loadNpyFile(file_pth: Path, isLabelFile: bool, useGpu=True) -> np.ndarray:
     """
     Load data from an NPY file
 
@@ -221,8 +221,8 @@ def loadNpyFile(file_pth: Path, isTest: bool, useGpu=True) -> np.ndarray:
     ----------
     file_pth
         Path to the file containing the data
-    isTest
-        Whether the file contains testing data (to test the magic number of the file)
+    isLabelFile
+        Whether the file contains labels (to test the magic number of the file)
     useGpu
         Whether to use GPU or CPU as data device
 
@@ -237,7 +237,7 @@ def loadNpyFile(file_pth: Path, isTest: bool, useGpu=True) -> np.ndarray:
     else:
         xp = np
 
-    dt = np.uint8 if isTest else np.float32
+    dt = np.int8 if isLabelFile else np.float32
 
     data = xp.load(file_pth).astype(dt)
     if useGpu:
@@ -303,15 +303,14 @@ def loadY(file_pth: Path, loadFunc, useGpu=True, encoded=True) -> np.ndarray:
     Returns
     -------
     np.ndarray
-        A 2D array of shape (num_instances, num_classes or 1) and dtype np.float32
+        A 2D array of shape (num_instances, num_classes or None) and dtype np.int8
+
     """
 
-    y = loadFunc(file_pth, True, useGpu).astype(np.uint8)
+    y = loadFunc(file_pth, True, useGpu).astype(np.int8)
 
     if encoded:
         y = oneHotEncode(MNIST_CLASSES, y)
-    else:
-        y = y.reshape(-1, 1)
 
     if useGpu:
         cp.cuda.Stream.null.synchronize()
@@ -372,6 +371,7 @@ def loadIdxTesting(dataDir: Path, useGpu=True) -> XY_DATA:
         A 2-element tuple of numpy arrays (X,y) |
         X: Shape = (instances, features), dtype = np.float32 |
         y: Shape = (instances, 1), dtype = np.uint8
+
     """
 
     xPth: Path = dataDir / "t10k-images-idx3-ubyte"
@@ -384,7 +384,7 @@ def loadIdxTesting(dataDir: Path, useGpu=True) -> XY_DATA:
     features = 784
 
     X = loadX(xPth, loadIdxFile, instances, features, useGpu=useGpu)
-    y = loadY(yPth, loadIdxFile, useGpu=useGpu, encoded=False)
+    y = loadY(yPth, loadIdxFile, useGpu=useGpu, encoded=False).astype(np.uint8)
 
     return X, y
 
@@ -460,7 +460,7 @@ def loadNpyTesting(
     assert yPth.exists()
 
     X = loadX(xPth, loadNpyFile, instances, features, useGpu=useGpu)
-    y = loadY(yPth, loadNpyFile, useGpu=useGpu, encoded=False)
+    y = loadY(yPth, loadNpyFile, useGpu=useGpu, encoded=False).astype(np.uint8)
 
     return X, y
 
@@ -593,7 +593,7 @@ def loadAffNist(useGpu=True, encoded=True) -> TRAIN_TEST_DATA:
     )
     testY = loadY(
         root / f"{prefix}_testY.npy", loadNpyFile, useGpu=useGpu, encoded=False
-    )
+    ).astype(np.uint8)
 
     return trainX, trainY, testX, testY
 
@@ -646,7 +646,7 @@ def loadCifar10(useGpu=True, encoded=True) -> TRAIN_TEST_DATA:
     )
     testY = loadY(
         root / f"{prefix}_testY.npy", loadNpyFile, useGpu=useGpu, encoded=False
-    )
+    ).astype(np.uint8)
 
     return trainX, trainY, testX, testY
 
