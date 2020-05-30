@@ -25,7 +25,7 @@ class Network(object):
         useGpu=False,
         binarized=False,
         useBias=False,
-        batchNorm=False,
+        useBatchNorm=False,
     ):
 
         if useGpu:
@@ -33,7 +33,7 @@ class Network(object):
         else:
             self.xp = np
 
-        if batchNorm:
+        if useBatchNorm and useBias:
             print(
                 "Won't use bias with BatchNorm, as it will automatically get cancelled in the normalization step"
             )
@@ -42,7 +42,7 @@ class Network(object):
         self.isBinarized = binarized
         self.useBias = useBias
         self.useGpu = useGpu
-        self.useBatchNorm = batchNorm
+        self.useBatchNorm = useBatchNorm
         self.unitList = units
         self._layers = self.__unitsToLayers(units)
 
@@ -86,12 +86,16 @@ class Network(object):
 
         gammas = []
         betas = []
+        mus = []
+        sigmas = []
         for layer in self._layers:
-            gamma, beta = layer.batchNormParams
+            gamma, beta, mu, sigma = layer.batchNormParams
             gammas.append(gamma)
             betas.append(beta)
+            mus.append(mu)
+            sigmas.append(sigma)
 
-        return gammas, betas
+        return gammas, betas, mus, sigmas
 
     @property
     def linearLayers(self):
@@ -107,14 +111,21 @@ class Network(object):
         for layer, w, b in zip(self.linearLayers, weights, biases):
             layer.load_parameters(w, b)
 
-    def loadBatchNormParameters(self, gammas: ArrayList, betas: ArrayList):
+    def loadBatchNormParameters(
+        self, gammas: ArrayList, betas: ArrayList, mus: ArrayList, sigmas: ArrayList
+    ):
         assert len(gammas) == len(self._layers)
         assert len(betas) == len(gammas)
-        for gamma, beta, layer in zip(gammas, betas, self._layers):
-            layer.loadBatchNormParams(gamma, beta)
+        assert len(mus) == len(betas)
+        assert len(sigmas) == len(mus)
+
+        for gamma, beta, mu, sigma, layer in zip(
+            gammas, betas, mus, sigmas, self._layers
+        ):
+            layer.loadBatchNormParams(gamma, beta, mu, sigma)
 
     @staticmethod
-    def fromModel(filePth: Path, useGpu=False, binarized=False, useBias=False):
+    def fromModel(filePth: Path, useGpu=False, binarized=False):
         assert filePth.exists()
         print(f"\nLoading model from {filePth}\n")
 
@@ -123,10 +134,23 @@ class Network(object):
             assert "units" in fpKeys
             assert "weights" in fpKeys
             assert "useBias" in fpKeys
+            assert "useBatchNorm" in fpKeys
 
             unitList = list(map(int, fp["units"][()]))
+            useBias = bool(fp["useBias"][()])
+            useBatchNorm = bool(fp["useBatchNorm"][()])
+            if useBatchNorm and useBias:
+                print("Setting useBias to false cause of batchnorm")
+                useBias = False
 
-            nn = Network(unitList, useGpu=useGpu, useBias=useBias, binarized=binarized)
+            nn = Network(
+                unitList,
+                useGpu=useGpu,
+                useBias=useBias,
+                binarized=binarized,
+                useBatchNorm=useBatchNorm,
+            )
+
             weights = []
             biases = []
             ws = fp["weights"]
@@ -134,13 +158,42 @@ class Network(object):
                 weights.append(nn.xp.array(w[()], dtype=np.float32))
 
             if useBias:
-                assert fp["useBias"]
                 assert "biases" in fpKeys
                 bs = fp["biases"]
                 for b in bs.values():
                     biases.append(nn.xp.array(b[()], dtype=np.float32))
 
             nn.load_weights(weights, biases)
+
+            if useBatchNorm:
+                assert "gammas" in fpKeys
+                assert "betas" in fpKeys
+                assert "mus" in fpKeys
+                assert "sigmas" in fpKeys
+
+                gammas = []
+                betas = []
+                mus = []
+                sigmas = []
+
+                gs = fp["gammas"]
+                bts = fp["betas"]
+                muDS = fp["mus"]
+                sigmaDS = fp["sigmas"]
+
+                for gamma in gs.values():
+                    gammas.append(nn.xp.array(gamma[()], dtype=np.float32))
+
+                for beta in bts.values():
+                    betas.append(nn.xp.array(beta[()], dtype=np.float32))
+
+                for mu in muDS.values():
+                    mus.append(nn.xp.array(mu[()], dtype=np.float32))
+
+                for sigma in sigmaDS.values():
+                    sigmas.append(nn.xp.array(sigma[()], dtype=np.float32))
+
+                nn.loadBatchNormParameters(gammas, betas, mus, sigmas)
 
         return nn
 
@@ -263,6 +316,7 @@ class Network(object):
                     cp.cuda.Stream.null.synchronize()
 
         if save_best_params:
+            # TODO: save batchnorm params
             print(
                 "\nBest {0} Accuracy:\t{1:.03f}%".format(accType, float(best_accuracy))
             )
@@ -353,12 +407,22 @@ class Network(object):
             if self.useBatchNorm:
                 gs = fp.create_group("gammas")
                 bts = fp.create_group("betas")
-                for i, (gamma, beta) in enumerate(self.batchNormParams):
+                mus = fp.create_group("mus")
+                sigmas = fp.create_group("sigmas")
+                for i, (gamma, beta, mu, sigma) in enumerate(
+                    zip(*self.batchNormParams)
+                ):
                     gs.create_dataset(
                         f"gammas_{i}", data=cp.asnumpy(gamma), dtype=np.float32
                     )
                     bts.create_dataset(
                         f"betas_{i}", data=cp.asnumpy(beta), dtype=np.float32
+                    )
+                    mus.create_dataset(
+                        f"mus_{i}", data=cp.asnumpy(mu), dtype=np.float32
+                    )
+                    sigmas.create_dataset(
+                        f"sigmas_{i}", data=cp.asnumpy(sigma), dtype=np.float32
                     )
 
         print(f"Saving model to {filePth}")

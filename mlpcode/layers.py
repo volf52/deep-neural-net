@@ -29,6 +29,8 @@ class BatchNormLayer(Layer):
         super(BatchNormLayer, self).__init__(layerUnits, gpu=gpu)
         self.beta = None
         self.gamma = None
+        self.mu = None
+        self.sigma = None
 
     @property
     def parameter_shape(self):
@@ -36,14 +38,29 @@ class BatchNormLayer(Layer):
 
     @property
     def batchNormParams(self):
-        return (self.gamma, self.beta)
+        assert self.isBuilt
+        return (self.gamma, self.beta, self.mu, self.sigma)
 
-    def loadBatchNormParams(self, gamma: np.ndarray, beta: np.ndarray):
-        raise NotImplementedError()
+    def loadBatchNormParams(
+        self, gamma: np.ndarray, beta: np.ndarray, mu: np.ndarray, sigma: np.ndarray
+    ):
+        paramsShape = self.parameter_shape
+        assert gamma.shape == paramsShape
+        assert beta.shape == paramsShape
+        assert mu.shape == paramsShape
+        assert sigma.shape == paramsShape
+
+        self.gamma = gamma
+        self.beta = beta
+        self.mu = mu
+        self.sigma = sigma
 
     def build(self):
         self.beta = self.xp.random.randn(self.layerUnits).astype(np.float32)
         self.gamma = self.xp.random.randn(self.layerUnits).astype(np.float32)
+        self.mu = self.xp.random.randn(self.layerUnits).astype(np.float32)
+        self.sigma = self.xp.random.randn(self.layerUnits).astype(np.float32)
+
         super(BatchNormLayer, self).build()
 
     def forward(self, z: np.ndarray, isTrain=True) -> np.ndarray:
@@ -51,6 +68,12 @@ class BatchNormLayer(Layer):
         assert self.isBuilt
 
         self.cache.clear()
+
+        if isTrain:
+            pass
+        else:
+            pass
+
         self.cache["input"] = z
 
         mu = z.mean()
@@ -117,10 +140,12 @@ class LinearLayer(Layer):
             assert bias.shape == self.bias_shape
             self.bias = bias
 
-    def loadBatchNormParams(self, gamma: np.ndarray, beta: np.ndarray):
+    def loadBatchNormParams(
+        self, gamma: np.ndarray, beta: np.ndarray, mu: np.ndarray, sigma: np.ndarray
+    ):
         assert self.batchNorm
 
-        self.batchNormLayer.load_parameters(gamma, beta)
+        self.batchNormLayer.loadBatchNormParams(gamma, beta, mu, sigma)
 
     def build(self, activation: af = None):
         if self.weights is None:
