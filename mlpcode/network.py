@@ -8,19 +8,24 @@ import numpy as np
 
 from mlpcode.activation import ACTIVATION_FUNCTIONS
 from mlpcode.activation import ActivationFuncs as af
-from mlpcode.layers import BinaryLayer, LinearLayer
+from mlpcode.layers import BinaryLayer, LinearLayer, BatchNormLayer
 from mlpcode.loss import LOSS_DERIVATES, LOSS_FUNCS
 from mlpcode.loss import LossFuncs as lf
 from mlpcode.optim import LRScheduler
 from mlpcode.utils import MODELDIR, XY_DATA
 
 ArrayList = List[np.ndarray]
-ModelLayer = Union[LinearLayer, BinaryLayer]
+ModelLayer = Union[LinearLayer, BinaryLayer, BatchNormLayer]
 
 
 class Network(object):
     def __init__(
-        self, units: List[int], useGpu=False, binarized=False, useBias=False,
+        self,
+        units: List[int],
+        useGpu=False,
+        binarized=False,
+        useBias=False,
+        useBatchNorm=False,
     ):
 
         if useGpu:
@@ -28,9 +33,16 @@ class Network(object):
         else:
             self.xp = np
 
+        if useBatchNorm and useBias:
+            print(
+                "Won't use bias with BatchNorm, as it will automatically get cancelled in the normalization step"
+            )
+            useBias = False
+
         self.isBinarized = binarized
         self.useBias = useBias
         self.useGpu = useGpu
+        self.useBatchNorm = useBatchNorm
         self.unitList = units
         self._layers = self.__unitsToLayers(units)
 
@@ -46,7 +58,13 @@ class Network(object):
     def __unitsToLayers(self, units: List[int]) -> List[ModelLayer]:
         layer: ModelLayer = BinaryLayer if self.isBinarized else LinearLayer
         layers = [
-            layer(lu, iu, gpu=self.useGpu, useBias=self.useBias)
+            layer(
+                lu,
+                iu,
+                gpu=self.useGpu,
+                useBias=self.useBias,
+                batchNorm=self.useBatchNorm,
+            )
             for lu, iu in zip(units[1:], units[:-1])
         ]
         return layers
@@ -62,6 +80,38 @@ class Network(object):
         else:
             return [None for _ in self.unitList[:-1]]
 
+    @property
+    def batchNormParams(self):
+        assert self.useBatchNorm
+
+        gammas = []
+        betas = []
+        mus = []
+        sigmas = []
+        for layer in self._layers:
+            gamma, beta, mu, sigma = layer.batchNormParams
+            gammas.append(gamma)
+            betas.append(beta)
+            mus.append(mu)
+            sigmas.append(sigma)
+
+        return gammas, betas, mus, sigmas
+
+    def _copyBnParams(self):
+        assert self.useBatchNorm
+        gammas, betas, mus, sigmas = self.batchNormParams
+
+        gammas = [g.copy() for g in gammas]
+        betas = [bts.copy() for bts in betas]
+        mus = [mu.copy() for mu in mus]
+        sigmas = [sigma.copy() for sigma in sigmas]
+
+        return gammas, betas, mus, sigmas
+
+    @property
+    def linearLayers(self):
+        return [layer for layer in self._layers if isinstance(layer, LinearLayer)]
+
     def load_weights(self, weights: ArrayList, biases: ArrayList = None):
         if not self.useBias:
             biases = [None for _ in weights]
@@ -69,11 +119,24 @@ class Network(object):
         assert len(weights) == len(self._layers)
         assert len(biases) == len(weights)
 
-        for layer, w, b in zip(self._layers, weights, biases):
-            layer.load_weights(w, b)
+        for layer, w, b in zip(self.linearLayers, weights, biases):
+            layer.load_parameters(w, b)
+
+    def loadBatchNormParameters(
+        self, gammas: ArrayList, betas: ArrayList, mus: ArrayList, sigmas: ArrayList
+    ):
+        assert len(gammas) == len(self._layers)
+        assert len(betas) == len(gammas)
+        assert len(mus) == len(betas)
+        assert len(sigmas) == len(mus)
+
+        for gamma, beta, mu, sigma, layer in zip(
+            gammas, betas, mus, sigmas, self._layers
+        ):
+            layer.loadBatchNormParams(gamma, beta, mu, sigma)
 
     @staticmethod
-    def fromModel(filePth: Path, useGpu=False, binarized=False, useBias=False):
+    def fromModel(filePth: Path, useGpu=False, binarized=False):
         assert filePth.exists()
         print(f"\nLoading model from {filePth}\n")
 
@@ -82,10 +145,23 @@ class Network(object):
             assert "units" in fpKeys
             assert "weights" in fpKeys
             assert "useBias" in fpKeys
+            assert "useBatchNorm" in fpKeys
 
             unitList = list(map(int, fp["units"][()]))
+            useBias = bool(fp["useBias"][()])
+            useBatchNorm = bool(fp["useBatchNorm"][()])
+            if useBatchNorm and useBias:
+                print("Setting useBias to false cause of batchnorm")
+                useBias = False
 
-            nn = Network(unitList, useGpu=useGpu, useBias=useBias, binarized=binarized)
+            nn = Network(
+                unitList,
+                useGpu=useGpu,
+                useBias=useBias,
+                binarized=binarized,
+                useBatchNorm=useBatchNorm,
+            )
+
             weights = []
             biases = []
             ws = fp["weights"]
@@ -93,13 +169,42 @@ class Network(object):
                 weights.append(nn.xp.array(w[()], dtype=np.float32))
 
             if useBias:
-                assert fp["useBias"]
                 assert "biases" in fpKeys
                 bs = fp["biases"]
                 for b in bs.values():
                     biases.append(nn.xp.array(b[()], dtype=np.float32))
 
             nn.load_weights(weights, biases)
+
+            if useBatchNorm:
+                assert "gammas" in fpKeys
+                assert "betas" in fpKeys
+                assert "mus" in fpKeys
+                assert "sigmas" in fpKeys
+
+                gammas = []
+                betas = []
+                mus = []
+                sigmas = []
+
+                gs = fp["gammas"]
+                bts = fp["betas"]
+                muDS = fp["mus"]
+                sigmaDS = fp["sigmas"]
+
+                for gamma in gs.values():
+                    gammas.append(nn.xp.array(gamma[()], dtype=np.float32))
+
+                for beta in bts.values():
+                    betas.append(nn.xp.array(beta[()], dtype=np.float32))
+
+                for mu in muDS.values():
+                    mus.append(nn.xp.array(mu[()], dtype=np.float32))
+
+                for sigma in sigmaDS.values():
+                    sigmas.append(nn.xp.array(sigma[()], dtype=np.float32))
+
+                nn.loadBatchNormParameters(gammas, betas, mus, sigmas)
 
         return nn
 
@@ -153,9 +258,11 @@ class Network(object):
             print("\nEXCEPTION: Must compile the model before running train")
             return
 
-        best_weights: ArrayList = [None for _ in self._layers]
-        best_biases: ArrayList = best_weights[:]
         best_accuracy = -1.0
+        if save_best_params:
+            best_weights: ArrayList = [None for _ in self._layers]
+            best_biases: ArrayList = best_weights[:]
+            best_bn_params = best_weights[:]
 
         n = len(trainX)
 
@@ -218,6 +325,8 @@ class Network(object):
                 best_weights = [w.copy() for w in self.weights]
                 if self.useBias:
                     best_biases = [b.copy() for b in self.biases]
+                if self.useBatchNorm:
+                    best_bn_params = self._copyBnParams()
                 if self.useGpu:
                     cp.cuda.Stream.null.synchronize()
 
@@ -227,6 +336,7 @@ class Network(object):
             )
             print("Switching to best params\n")
             self.load_weights(best_weights, best_biases)
+            self.loadBatchNormParameters(*best_bn_params)
 
         return costList, accList
 
@@ -255,7 +365,7 @@ class Network(object):
     def predict(self, X: np.ndarray, isTraining=False):
         a = X
         for layer in self._layers:
-            a = layer.forward(a, cache=isTraining)
+            a = layer.forward(a, isTrain=isTraining)
 
         return a
 
@@ -297,6 +407,7 @@ class Network(object):
         with h5py.File(filePth, "w") as fp:
             fp.create_dataset("units", data=np.array(self.unitList, dtype=np.uint32))
             fp.create_dataset("useBias", data=self.useBias)
+            fp.create_dataset("useBatchNorm", data=self.useBatchNorm)
             ws = fp.create_group("weights")
             for i, w in enumerate(self.weights):
                 ws.create_dataset(f"weights_{i}", data=cp.asnumpy(w), dtype=np.float32)
@@ -306,6 +417,27 @@ class Network(object):
                 for i, b in enumerate(self.biases):
                     bs.create_dataset(
                         f"biases_{i}", data=cp.asnumpy(b), dtype=np.float32
+                    )
+
+            if self.useBatchNorm:
+                gs = fp.create_group("gammas")
+                bts = fp.create_group("betas")
+                mus = fp.create_group("mus")
+                sigmas = fp.create_group("sigmas")
+                for i, (gamma, beta, mu, sigma) in enumerate(
+                    zip(*self.batchNormParams)
+                ):
+                    gs.create_dataset(
+                        f"gammas_{i}", data=cp.asnumpy(gamma), dtype=np.float32
+                    )
+                    bts.create_dataset(
+                        f"betas_{i}", data=cp.asnumpy(beta), dtype=np.float32
+                    )
+                    mus.create_dataset(
+                        f"mus_{i}", data=cp.asnumpy(mu), dtype=np.float32
+                    )
+                    sigmas.create_dataset(
+                        f"sigmas_{i}", data=cp.asnumpy(sigma), dtype=np.float32
                     )
 
         print(f"Saving model to {filePth}")

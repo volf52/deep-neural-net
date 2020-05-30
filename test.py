@@ -5,7 +5,7 @@ from mlpcode.optim import LRScheduler, LRSchedulerStrat as LRS
 from mlpcode.utils import DATASETS, loadDataset, MODELDIR
 
 useGpu = True
-binarized = False
+binarized = True
 dataset = DATASETS.mnist
 print("Loading {}".format(dataset))
 trainX, trainY, testX, testY = loadDataset(dataset, useGpu=useGpu)
@@ -15,7 +15,7 @@ trainX, trainY, testX, testY = loadDataset(dataset, useGpu=useGpu)
 print("Finished loading {} data".format(dataset))
 
 layers = [trainX.shape[1], 512, 10]
-epochs = 50
+epochs = 5
 batchSize = 100
 lr = 0.001
 # lr = 0.07
@@ -23,18 +23,20 @@ lr = LRScheduler(alpha=0.07, decay_rate=(0.07 - 1e-4) ** (1 / epochs), strategy=
 
 print("\nCreating neural net")
 # Creating from scratch
-# nn = Network(layers, useGpu=useGpu, binarized=binarized, useBias=True)
+# nn = Network(
+#     layers, useGpu=useGpu, binarized=binarized, useBias=True, useBatchNorm=True
+# )
 
 # Creating from a pretrained model
-modelPath = MODELDIR / "mnist_1590770375.122536.hdf5"
+modelPath = MODELDIR / "bnnKeras.hdf5"
 assert modelPath.exists()
-nn = Network.fromModel(modelPath, useGpu=useGpu, binarized=binarized, useBias=True)
+nn = Network.fromModel(modelPath, useGpu=useGpu, binarized=binarized)
 
 # Must compile the model before trying to train it
 nn.compile(lr=lr, hiddenAf=af.leaky_relu, outAf=af.softmax, lossF=lf.cross_entropy)
 
 # Save best will switch the model weights and biases to the ones with best accuracy at the end of the training loop
-nn.train(trainX, trainY, epochs, batch_size=batchSize, save_best_params=True)
+# nn.train(trainX, trainY, epochs, batch_size=batchSize, save_best_params=True)
 
 # Save will be called separately if we want to save the model
 # Set binarized to true if you want to save the binary version of the weights
