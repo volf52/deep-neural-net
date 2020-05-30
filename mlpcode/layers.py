@@ -24,6 +24,7 @@ class Layer:
 
 class BatchNormLayer(Layer):
     EPSILON = 1e-2
+    MA_BETA = 0.9  # Moving average beta parameter
 
     def __init__(self, layerUnits: int, gpu=False):
         super(BatchNormLayer, self).__init__(layerUnits, gpu=gpu)
@@ -69,36 +70,60 @@ class BatchNormLayer(Layer):
 
         super(BatchNormLayer, self).build()
 
-    def forward(self, z: np.ndarray, isTrain=True) -> np.ndarray:
+    def forward(self, Z: np.ndarray, isTrain=True) -> np.ndarray:
         # May add moving average later
         assert self.isBuilt
 
         self.cache.clear()
 
         if isTrain:
-            self.cache["input"] = z
+            mu = Z.mean(axis=0)
+            var = Z.var(axis=0)
 
-            mu = z.mean()
-            sigma = self.xp.sqrt(z.var() + self.EPSILON)
+            zNorm = (Z - mu) / self.xp.sqrt(var + self.EPSILON)
 
-            zNorm = (z - mu) / sigma
+            ztilde = self.gamma * zNorm + self.beta
 
-            ztilde = self.beta * zNorm + self.gamma
-
+            self.cache["input"] = Z
+            self.cache["znorm"] = zNorm
+            self.cache["mu"] = mu
+            self.cache["var"] = var
             self.cache["output"] = ztilde
         else:
-            ztilde = z - self.mu
+            ztilde = Z - self.mu
             ztilde /= self.xp.sqrt(self.sigma + self.EPSILON)
             ztilde *= self.gamma
             ztilde += self.beta
-            return ztilde
 
-        return z
+        return ztilde
 
-    def backwards(self, delta: np.ndarray):
+    def backwards(self, delta: np.ndarray, lr: float):
+        n, d = self.cache["input"].shape
+
+        xMu = self.cache["input"] - self.cache["mu"]
+        stdInv = 1.0 / self.xp.sqrt(self.cache["var"] + self.EPSILON)
+
+        dZnorm = delta * self.gamma
+        dVar = -0.5 * self.xp.sum(dZnorm * xMu, axis=0) * stdInv ** 3
+        dMu = self.xp.sum(dZnorm * -stdInv, axis=0) + dVar * self.xp.mean(
+            -2.0 * xMu, axis=0
+        )
+
+        newDelta = (dZnorm * stdInv) + (dVar * 2 * xMu / n) + (dMu / n)
+        dGamma = self.xp.sum(delta * self.cache["znorm"], axis=0)
+        dBeta = self.xp.sum(delta, axis=0)
+
+        self.gamma -= lr * dGamma
+        self.beta -= lr * dBeta
+
+        self.mu = (self.MA_BETA * self.mu) + ((1 - self.MA_BETA) * self.cache["mu"])
+        self.sigma = (self.MA_BETA * self.sigma) + (
+            (1 - self.MA_BETA) * self.cache["var"]
+        )
 
         self.cache.clear()
-        return delta
+
+        return newDelta
 
 
 class LinearLayer(Layer):
@@ -217,7 +242,7 @@ class LinearLayer(Layer):
 
         # batchnorm updates to delta
         if self.batchNorm:
-            delta = self.batchNormLayer.backwards(delta)
+            delta = self.batchNormLayer.backwards(delta, lr=lr)
 
         dw = self.cache["input"].T.dot(delta)
         # dw /= n

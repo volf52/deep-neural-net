@@ -97,6 +97,17 @@ class Network(object):
 
         return gammas, betas, mus, sigmas
 
+    def _copyBnParams(self):
+        assert self.useBatchNorm
+        gammas, betas, mus, sigmas = self.batchNormParams
+
+        gammas = [g.copy() for g in gammas]
+        betas = [bts.copy() for bts in betas]
+        mus = [mu.copy() for mu in mus]
+        sigmas = [sigma.copy() for sigma in sigmas]
+
+        return gammas, betas, mus, sigmas
+
     @property
     def linearLayers(self):
         return [layer for layer in self._layers if isinstance(layer, LinearLayer)]
@@ -247,9 +258,11 @@ class Network(object):
             print("\nEXCEPTION: Must compile the model before running train")
             return
 
-        best_weights: ArrayList = [None for _ in self._layers]
-        best_biases: ArrayList = best_weights[:]
         best_accuracy = -1.0
+        if save_best_params:
+            best_weights: ArrayList = [None for _ in self._layers]
+            best_biases: ArrayList = best_weights[:]
+            best_bn_params = best_weights[:]
 
         n = len(trainX)
 
@@ -312,16 +325,18 @@ class Network(object):
                 best_weights = [w.copy() for w in self.weights]
                 if self.useBias:
                     best_biases = [b.copy() for b in self.biases]
+                if self.useBatchNorm:
+                    best_bn_params = self._copyBnParams()
                 if self.useGpu:
                     cp.cuda.Stream.null.synchronize()
 
         if save_best_params:
-            # TODO: save batchnorm params
             print(
                 "\nBest {0} Accuracy:\t{1:.03f}%".format(accType, float(best_accuracy))
             )
             print("Switching to best params\n")
             self.load_weights(best_weights, best_biases)
+            self.loadBatchNormParameters(*best_bn_params)
 
         return costList, accList
 
