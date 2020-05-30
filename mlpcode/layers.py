@@ -56,14 +56,16 @@ class BatchNormLayer(Layer):
         self.sigma = sigma
 
     def build(self):
+        # Beta and mu use zeros init, while gamma and sigma use ones init
+
         if self.beta is None:
-            self.beta = self.xp.random.randn(self.layerUnits).astype(np.float32)
+            self.beta = self.xp.zeros(self.layerUnits, dtype=np.float32)
         if self.gamma is None:
-            self.gamma = self.xp.random.randn(self.layerUnits).astype(np.float32)
+            self.gamma = self.xp.ones(self.layerUnits, dtype=np.float32)
         if self.mu is None:
-            self.mu = self.xp.random.randn(self.layerUnits).astype(np.float32)
+            self.mu = self.xp.zeros(self.layerUnits, dtype=np.float32)
         if self.sigma is None:
-            self.sigma = self.xp.random.randn(self.layerUnits).astype(np.float32)
+            self.sigma = self.xp.ones(self.layerUnits, dtype=np.float32)
 
         super(BatchNormLayer, self).build()
 
