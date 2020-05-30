@@ -56,10 +56,14 @@ class BatchNormLayer(Layer):
         self.sigma = sigma
 
     def build(self):
-        self.beta = self.xp.random.randn(self.layerUnits).astype(np.float32)
-        self.gamma = self.xp.random.randn(self.layerUnits).astype(np.float32)
-        self.mu = self.xp.random.randn(self.layerUnits).astype(np.float32)
-        self.sigma = self.xp.random.randn(self.layerUnits).astype(np.float32)
+        if self.beta is None:
+            self.beta = self.xp.random.randn(self.layerUnits).astype(np.float32)
+        if self.gamma is None:
+            self.gamma = self.xp.random.randn(self.layerUnits).astype(np.float32)
+        if self.mu is None:
+            self.mu = self.xp.random.randn(self.layerUnits).astype(np.float32)
+        if self.sigma is None:
+            self.sigma = self.xp.random.randn(self.layerUnits).astype(np.float32)
 
         super(BatchNormLayer, self).build()
 
@@ -70,25 +74,23 @@ class BatchNormLayer(Layer):
         self.cache.clear()
 
         if isTrain:
-            pass
+            self.cache["input"] = z
+
+            mu = z.mean()
+            sigma = self.xp.sqrt(z.var() + self.EPSILON)
+
+            zNorm = (z - mu) / sigma
+
+            ztilde = self.beta * zNorm + self.gamma
+
+            self.cache["output"] = ztilde
         else:
-            pass
+            ztilde = z - self.mu
+            ztilde /= self.xp.sqrt(self.sigma + self.EPSILON)
+            ztilde *= self.gamma
+            ztilde += self.beta
+            return ztilde
 
-        self.cache["input"] = z
-
-        mu = z.mean()
-        sigma = self.xp.sqrt(z.var() + self.EPSILON)
-
-        zNorm = (z - mu) / sigma
-
-        ztilde = self.beta * zNorm + self.gamma
-
-        self.cache["output"] = ztilde
-
-        if not isTrain:
-            self.cache.clear()
-
-        # return ztilde
         return z
 
     def backwards(self, delta: np.ndarray):
@@ -148,6 +150,7 @@ class LinearLayer(Layer):
         self.batchNormLayer.loadBatchNormParams(gamma, beta, mu, sigma)
 
     def build(self, activation: af = None):
+
         if self.weights is None:
             self.weights = (
                 self.xp.random.randn(self.inputUnits, self.layerUnits)
@@ -240,9 +243,10 @@ class BinaryLayer(LinearLayer):
         self.H = None
 
     def build(self, activation: af = None):
-        self.H = self.xp.sqrt(1.5 / (self.layerUnits + self.inputUnits)).astype(
-            np.float32
-        )
+        if self.H is None:
+            self.H = self.xp.sqrt(1.5 / (self.layerUnits + self.inputUnits)).astype(
+                np.float32
+            )
         super(BinaryLayer, self).build(activation)
 
     @staticmethod
