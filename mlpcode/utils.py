@@ -137,7 +137,6 @@ def quantize(x: np.ndarray, precision=32):
     xp.divide(x, intervals, out=x)
 
 
-# TODO: Finish split_train_valid
 def split_train_valid(
     X: np.ndarray, y: np.ndarray, valSize: Union[int, float] = 0.2, shuffle=False
 ) -> TRAIN_TEST_DATA:
@@ -163,8 +162,16 @@ def split_train_valid(
         valX: Shape = (val_instances, features), dtype = np.float32 |
         valY: Shape = (val_instances, None), dtype = np.int8
     """
+    n = X.shape[0]
+    if isinstance(valSize, float):
+        valSize = int(valSize * n)
 
-    pass
+    if shuffle:
+        perms = np.random.permutation(n)
+        X = X[perms]
+        y = y[perms]
+
+    return X[:-valSize], X[-valSize:], y[:-valSize], y[-valSize:]
 
 
 # DATA I/O UTILS AND HELPER FUNCTIONS

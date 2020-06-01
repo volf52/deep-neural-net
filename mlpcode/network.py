@@ -259,6 +259,7 @@ class Network(object):
             return
 
         best_accuracy = -1.0
+        best_acc_epoch = -1
         if save_best_params:
             best_weights: ArrayList = [None for _ in self._layers]
             best_biases: ArrayList = best_weights[:]
@@ -289,7 +290,7 @@ class Network(object):
         print(f"\n\nStarting training (binarized: {self.isBinarized})")
         print("=" * 20)
         print()
-        for j in range(epochs):
+        for curr_epoch in range(epochs):
             epochCost: List[float] = []
 
             # random shuffling
@@ -315,13 +316,14 @@ class Network(object):
             costList.append(cost)
 
             print(
-                "Epoch {0} / {7}:\t{1} Acc: {2} / {3} ({4:.05f}%)\t{5} Loss: {6:.02f}".format(
-                    j + 1, accType, correct, n_test, acc, accType, cost, epochs,
+                "Epoch {0} / {6}:\t{1} Acc: {2} / {3} ({4:.05f}%)\tLoss: {5:.02f}".format(
+                    curr_epoch + 1, accType, correct, n_test, acc, cost, epochs,
                 )
             )
 
             if save_best_params and acc > best_accuracy:
                 best_accuracy = acc
+                best_acc_epoch = curr_epoch
                 best_weights = [w.copy() for w in self.weights]
                 if self.useBias:
                     best_biases = [b.copy() for b in self.biases]
@@ -332,11 +334,14 @@ class Network(object):
 
         if save_best_params:
             print(
-                "\nBest {0} Accuracy:\t{1:.03f}%".format(accType, float(best_accuracy))
+                "\nBest {0} Accuracy:\t{1:.03f}% (epoch: {2})".format(
+                    accType, float(best_accuracy), best_acc_epoch
+                )
             )
             print("Switching to best params\n")
             self.load_weights(best_weights, best_biases)
-            self.loadBatchNormParameters(*best_bn_params)
+            if self.useBatchNorm:
+                self.loadBatchNormParameters(*best_bn_params)
 
         return costList, accList
 
