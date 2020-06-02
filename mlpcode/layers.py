@@ -234,8 +234,7 @@ class LinearLayer(Layer):
         assert "input" in self.cache
         assert "z" in self.cache
 
-        delta = dA  # shape: (self.layersUnits, num_instances)
-        n = delta.shape[0]
+        delta = dA  # shape: (num_instances, self.layersUnits_
         if self.activation is not None and activDeriv:
             assert "a" in self.cache
             delta = ACTIVATION_DERIVATIVES[self.activation](dA, self.cache["a"])
@@ -245,7 +244,10 @@ class LinearLayer(Layer):
             delta = self.batchNormLayer.backwards(delta, lr=lr)
 
         dw = self.cache["input"].T.dot(delta)
-        # dw /= n
+
+        if self.useBias:
+            db = delta.mean(axis=0, dtype=np.float32)
+            self.bias -= lr * db
 
         dlPrev = delta.dot(self.weights.T)
 
