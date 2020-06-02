@@ -15,16 +15,21 @@ trainX, valX, trainY, valY = split_train_valid(trainX, trainY)
 # trainX, trainY, testX, testY = loadDataset(dataset, useGpu=useGpu, quant_precision=2)
 print("Finished loading {} data".format(dataset))
 
-layers = [trainX.shape[1], 512, 1024, 10]
-epochs = 100
+layers = [trainX.shape[1], 512, 512, 10]
+epochs = 1000
 batchSize = 100
-lr = 0.001
+lrStart = 7e-2
+lrEnd = 1e-4
 # lr = 0.07
-lr = LRScheduler(alpha=0.07, decay_rate=(0.07 - 1e-4) ** (1 / epochs), strategy=LRS.exp)
+lr = LRScheduler(
+    alpha=lrStart, decay_rate=(lrStart - lrEnd) ** (1 / epochs), strategy=LRS.exp
+)
 
 print("\nCreating neural net")
 # Creating from scratch
-nn = Network(layers, useGpu=useGpu, binarized=binarized, useBatchNorm=True)
+nn = Network(
+    layers, useGpu=useGpu, binarized=binarized, useBatchNorm=False, useBias=True
+)
 
 # Creating from a pretrained model
 # modelPath = MODELDIR / "bnnKeras.hdf5"
@@ -32,7 +37,7 @@ nn = Network(layers, useGpu=useGpu, binarized=binarized, useBatchNorm=True)
 # nn = Network.fromModel(modelPath, useGpu=useGpu, binarized=binarized)
 
 # Must compile the model before trying to train it
-nn.compile(lr=lr, hiddenAf=af.leaky_relu, outAf=af.softmax, lossF=lf.cross_entropy)
+nn.compile(lr=lr, hiddenAf=af.sigmoid, outAf=af.softmax, lossF=lf.cross_entropy)
 
 # Save best will switch the model weights and biases to the ones with best accuracy at the end of the training loop
 nn.train(
@@ -50,7 +55,7 @@ nn.train(
 unitsListStr = "_".join(map(str, nn.unitList))
 nn.save_weights(modelName=f"{dataset}_{unitsListStr}", binarized=False)
 
-correct = nn.evaluate(testX, testY, batch_size=batchSize)
+correct = nn.evaluate(testX, testY, batch_size=-1)
 acc = correct / testX.shape[0] * 100.0
 print(
     "Accuracy on test set:\t{0} / {1} : {2:.03f}%".format(correct, testX.shape[0], acc)

@@ -268,14 +268,10 @@ class Network(object):
         n = len(trainX)
 
         costList: List[float] = []
-        accList: List[float] = []
+        trainingAccList: List[float] = []
+        valAccList: List[float] = []
 
-        if valX is None:
-            n_test = n
-            valX = trainX.copy()
-            valY = trainY.copy()
-            accType = "Training"
-        else:
+        if valX is not None:
             n_test = len(valX)
             accType = "Validation"
 
@@ -309,17 +305,21 @@ class Network(object):
             self._lr.step()
 
             cost = sum(epochCost) / len(epochCost)
-            correct = self.evaluate(valX, valY)
-            acc = correct * 100.0 / n_test
+            trainLabels = trainY.argmax(axis=1).astype(np.uint8)
+            acc = self.get_accuracy(trainX, trainLabels)
 
-            accList.append(acc)
+            trainingAccList.append(acc)
             costList.append(cost)
 
-            print(
-                "Epoch {0} / {6}:\t{1} Acc: {2} / {3} ({4:.05f}%)\tLoss: {5:.02f}".format(
-                    curr_epoch + 1, accType, correct, n_test, acc, cost, epochs,
-                )
-            )
+            if valX is not None:
+                valAcc = self.get_accuracy(valX, valY)
+                valAccList.append(valAcc)
+
+            mainStr = f"Epoch {curr_epoch+1} / {epochs}\tAccuracy : {acc:0.3f}%"
+            if valX is not None:
+                mainStr += f"\tVal Acc: {valAcc:0.3f}%"
+            mainStr += f"\tLoss: {cost:.02f}"
+            print(mainStr)
 
             if save_best_params and acc > best_accuracy:
                 best_accuracy = acc
@@ -343,7 +343,7 @@ class Network(object):
             if self.useBatchNorm:
                 self.loadBatchNormParameters(*best_bn_params)
 
-        return costList, accList
+        return costList, trainingAccList, valAccList
 
     def __updateBatch(self, batch: XY_DATA, lr: float):
         X, y = batch
@@ -379,7 +379,7 @@ class Network(object):
         preds = yhat.argmax(axis=1)
         return preds
 
-    def evaluate(self, X: np.ndarray, y: np.ndarray, batch_size=1):
+    def evaluate(self, X: np.ndarray, y: np.ndarray, batch_size=-1):
         # testY should NOT be one hot encoded for this to work
         # The code at the start of training takes care of it if testY was one-hot encoded
         # when passed into the train func
@@ -396,7 +396,7 @@ class Network(object):
 
         return int(correct)
 
-    def get_accuracy(self, X: np.ndarray, y: np.ndarray, batch_size=1):
+    def get_accuracy(self, X: np.ndarray, y: np.ndarray, batch_size=-1):
         correct = self.evaluate(X, y, batch_size=batch_size)
         acc = correct * 100.0 / X.shape[0]
         return acc
@@ -449,7 +449,7 @@ class Network(object):
 
     @staticmethod
     def get_batches(X: np.ndarray, y: np.ndarray, batch_size: int, n: int):
-        if batch_size == 1:
+        if batch_size == -1:
             batches = [(X, y)]
         else:
             batches = (
