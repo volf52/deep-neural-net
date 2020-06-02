@@ -268,7 +268,7 @@ class Network(object):
         n = len(trainX)
 
         costList: List[float] = []
-        trainingAccList: List[float] = []
+        trainAccList: List[float] = []
         valAccList: List[float] = []
 
         if valX is not None:
@@ -308,16 +308,17 @@ class Network(object):
             trainLabels = trainY.argmax(axis=1).astype(np.uint8)
             acc = self.get_accuracy(trainX, trainLabels)
 
-            trainingAccList.append(acc)
+            trainAccList.append(acc)
             costList.append(cost)
 
-            if valX is not None:
-                valAcc = self.get_accuracy(valX, valY)
-                valAccList.append(valAcc)
-
             mainStr = f"Epoch {curr_epoch+1} / {epochs}\tAccuracy : {acc:0.3f}%"
+
             if valX is not None:
-                mainStr += f"\tVal Acc: {valAcc:0.3f}%"
+                acc = self.get_accuracy(valX, valY)
+                valAccList.append(acc)
+
+            if valX is not None:
+                mainStr += f"\tVal Acc: {acc:0.3f}%"
             mainStr += f"\tLoss: {cost:.02f}"
             print(mainStr)
 
@@ -343,7 +344,7 @@ class Network(object):
             if self.useBatchNorm:
                 self.loadBatchNormParameters(*best_bn_params)
 
-        return costList, trainingAccList, valAccList
+        return costList, trainAccList, valAccList
 
     def __updateBatch(self, batch: XY_DATA, lr: float):
         X, y = batch
