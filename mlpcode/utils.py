@@ -45,6 +45,7 @@ XY_DATA = Tuple[np.ndarray, np.ndarray]
 class DATASETS(Enum):
     mnist = "mnist"
     fashion = "fashion-mnist"
+    cifar10 = "cifar-10"
     mnistc_brightness = "mnist_c-brightness"
     mnistc_canny_edges = "mnist_c-canny_edges"
     mnistc_dotted_line = "mnist_c-dotted_line"
@@ -61,7 +62,22 @@ class DATASETS(Enum):
     mnistc_stripe = "mnist_c-stripe"
     mnistc_translate = "mnist_c-translate"
     mnistc_zigzag = "mnist_c-zigzag"
-    cifar10 = "cifar-10"
+    mnistc_contrast = "mnist_c-contrast"
+    mnistc_defocus_blur = "mnist_c-defocus_blur"
+    mnistc_elastic_transform = "mnist_c-elastic_transform"
+    mnistc_frost = "mnist_c-frost"
+    mnistc_gaussian_blur = "mnist_c-gaussian_blur"
+    mnistc_gaussian_noise = "mnist_c-gaussian_noise"
+    mnistc_inverse = "mnist_c-inverse"
+    mnistc_jpeg_compression = "mnist_c-jpeg_compression"
+    mnistc_line = "mnist_c-line"
+    mnistc_pessimal_noise = "mnist_c-pessimal_noise"
+    mnistc_pixelate = "mnist_c-pixelate"
+    mnistc_quantize = "mnist_c-quantize"
+    mnistc_saturate = "mnist_c-saturate"
+    mnistc_snow = "mnist_c-snow"
+    mnistc_speckle_noise = "mnist_c-speckle_noise"
+    mnistc_zoom_blur = "mnist_c-zoom_blur"
 
     # affnist = 'affNIST'
 
@@ -177,7 +193,7 @@ def split_train_valid(
 # DATA I/O UTILS AND HELPER FUNCTIONS
 
 
-def loadIdxFile(file_pth: Path, isTest: bool, useGpu=True) -> np.ndarray:
+def loadIdxFile(file_pth: Path, isTest: bool, useGpu=False) -> np.ndarray:
     """
     Load data from an IDX3 file
 
@@ -220,7 +236,7 @@ def loadIdxFile(file_pth: Path, isTest: bool, useGpu=True) -> np.ndarray:
     return data
 
 
-def loadNpyFile(file_pth: Path, isLabelFile: bool, useGpu=True) -> np.ndarray:
+def loadNpyFile(file_pth: Path, isLabelFile: bool, useGpu=False) -> np.ndarray:
     """
     Load data from an NPY file
 
@@ -254,7 +270,7 @@ def loadNpyFile(file_pth: Path, isLabelFile: bool, useGpu=True) -> np.ndarray:
 
 
 def loadX(
-    file_pth: Path, loadFunc, num_instances: int, num_features: int, useGpu=True,
+    file_pth: Path, loadFunc, num_instances: int, num_features: int, useGpu=False,
 ) -> np.ndarray:
     """
     Load data for training/testing
@@ -292,7 +308,7 @@ def loadX(
     return X
 
 
-def loadY(file_pth: Path, loadFunc, useGpu=True, encoded=True) -> np.ndarray:
+def loadY(file_pth: Path, loadFunc, useGpu=False, encoded=True) -> np.ndarray:
     """
     Load labels for training/testing
 
@@ -325,7 +341,7 @@ def loadY(file_pth: Path, loadFunc, useGpu=True, encoded=True) -> np.ndarray:
     return y
 
 
-def loadIdxTraining(dataDir: Path, useGpu=True, encoded=True) -> XY_DATA:
+def loadIdxTraining(dataDir: Path, useGpu=False, encoded=True) -> XY_DATA:
     """
     Loads data for training from dir with IDX3 files.
 
@@ -361,7 +377,7 @@ def loadIdxTraining(dataDir: Path, useGpu=True, encoded=True) -> XY_DATA:
     return X, y
 
 
-def loadIdxTesting(dataDir: Path, useGpu=True) -> XY_DATA:
+def loadIdxTesting(dataDir: Path, useGpu=False) -> XY_DATA:
     """
     Loads data for testing from dir with IDX3 files.
 
@@ -397,7 +413,7 @@ def loadIdxTesting(dataDir: Path, useGpu=True) -> XY_DATA:
 
 
 def loadNpyTraining(
-    dataDir: Path, instances: int, features: int, useGpu=True, encoded=True
+    dataDir: Path, instances: int, features: int, useGpu=False, encoded=True
 ) -> XY_DATA:
     """
     Loads data for training from dir with NPY files.
@@ -436,7 +452,7 @@ def loadNpyTraining(
 
 
 def loadNpyTesting(
-    dataDir: Path, instances: int, features: int, useGpu=True
+    dataDir: Path, instances: int, features: int, useGpu=False
 ) -> XY_DATA:
     """
     Loads data for testing from dir with NPY files.
@@ -475,7 +491,7 @@ def loadNpyTesting(
 # SECTION: DATASET LOADERS
 
 
-def loadMnistC(category: DATASETS, useGpu=True, encoded=True) -> TRAIN_TEST_DATA:
+def loadMnistC(category: DATASETS, useGpu=False, encoded=True) -> TRAIN_TEST_DATA:
     """
     Loads MNIST-C data
 
@@ -518,7 +534,7 @@ def loadMnistC(category: DATASETS, useGpu=True, encoded=True) -> TRAIN_TEST_DATA
     return trainX, trainY, testX, testY
 
 
-def loadMnist(useGpu=True, encoded=True) -> TRAIN_TEST_DATA:
+def loadMnist(useGpu=False, encoded=True) -> TRAIN_TEST_DATA:
     """
     Loads MNIST data
 
@@ -545,7 +561,7 @@ def loadMnist(useGpu=True, encoded=True) -> TRAIN_TEST_DATA:
     return trainX, trainY, testX, testY
 
 
-def loadFashionMnist(useGpu=True, encoded=True) -> TRAIN_TEST_DATA:
+def loadFashionMnist(useGpu=False, encoded=True) -> TRAIN_TEST_DATA:
     """
     Loads Fashion-MNIST data
 
@@ -572,7 +588,7 @@ def loadFashionMnist(useGpu=True, encoded=True) -> TRAIN_TEST_DATA:
     return trainX, trainY, testX, testY
 
 
-def loadAffNist(useGpu=True, encoded=True) -> TRAIN_TEST_DATA:
+def loadAffNist(useGpu=False, encoded=True) -> TRAIN_TEST_DATA:
     root = DATADIR / "affnist"
     assert root.exists()
 
@@ -605,7 +621,7 @@ def loadAffNist(useGpu=True, encoded=True) -> TRAIN_TEST_DATA:
     return trainX, trainY, testX, testY
 
 
-def loadCifar10(useGpu=True, encoded=True) -> TRAIN_TEST_DATA:
+def loadCifar10(useGpu=False, encoded=True) -> TRAIN_TEST_DATA:
     """
     Loads CIFAR-10 (greyscale) data
 
@@ -667,7 +683,7 @@ LOADING_FUNCS = {
 
 def loadDataset(
     dataset: DATASETS,
-    useGpu=True,
+    useGpu=False,
     encoded=True,
     quant_precision: int = None,
     quantize_test=False,
@@ -716,10 +732,16 @@ def loadDataset(
 
 
 if __name__ == "__main__":
-    trainX, trainY, testX, testY = loadDataset(DATASETS.cifar10, quant_precision=2)
-    # trainX, trainY, testX, testY = loadAffNist(useGpu=False)
+    mnistCArr = [x for x in DATASETS if str(x).startswith("mnist_c")]
+    totalDatasets = len(mnistCArr)
+    for ds in mnistCArr:
+        trainX, trainY, testX, testY = loadDataset(ds)
+        print("=" * 5)
+        print(ds)
+        print((trainX.shape, trainX.dtype))
+        print((trainY.shape, trainY.dtype))
+        print((testX.shape, testX.dtype))
+        print((testY.shape, testY.dtype))
 
-    print((trainX.shape, trainX.dtype))
-    print((trainY.shape, trainY.dtype))
-    print((testX.shape, testX.dtype))
-    print((testY.shape, testY.dtype))
+    print("-" * 15)
+    print(f"Total DS: {totalDatasets}")
