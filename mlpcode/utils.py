@@ -409,6 +409,10 @@ def loadIdxTesting(dataDir: Path, useGpu=False) -> XY_DATA:
     X = loadX(xPth, loadIdxFile, instances, features, useGpu=useGpu)
     y = loadY(yPth, loadIdxFile, useGpu=useGpu, encoded=False).astype(np.uint8)
 
+    if y.ndim == 2:
+        assert y.shape[1] == 1
+        y = y.squeeze()
+
     return X, y
 
 
@@ -484,6 +488,10 @@ def loadNpyTesting(
 
     X = loadX(xPth, loadNpyFile, instances, features, useGpu=useGpu)
     y = loadY(yPth, loadNpyFile, useGpu=useGpu, encoded=False).astype(np.uint8)
+
+    if y.ndim == 2:
+        assert y.shape[1] == 1
+        y = y.squeeze()
 
     return X, y
 
@@ -732,16 +740,18 @@ def loadDataset(
 
 
 if __name__ == "__main__":
-    mnistCArr = [x for x in DATASETS if str(x).startswith("mnist_c")]
-    totalDatasets = len(mnistCArr)
-    for ds in mnistCArr:
-        trainX, trainY, testX, testY = loadDataset(ds)
-        print("=" * 5)
-        print(ds)
-        print((trainX.shape, trainX.dtype))
-        print((trainY.shape, trainY.dtype))
-        print((testX.shape, testX.dtype))
-        print((testY.shape, testY.dtype))
-
-    print("-" * 15)
-    print(f"Total DS: {totalDatasets}")
+    trainX, trainY, testX, testY = loadDataset(DATASETS.mnistc_jpeg_compression)
+    print(testY.shape)
+    # mnistCArr = [x for x in DATASETS if str(x).startswith("mnist_c")]
+    # totalDatasets = len(mnistCArr)
+    # for ds in mnistCArr:
+    #     trainX, trainY, testX, testY = loadDataset(ds)
+    #     print("=" * 5)
+    #     print(ds)
+    #     print((trainX.shape, trainX.dtype))
+    #     print((trainY.shape, trainY.dtype))
+    #     print((testX.shape, testX.dtype))
+    #     print((testY.shape, testY.dtype))
+    #
+    # print("-" * 15)
+    # print(f"Total DS: {totalDatasets}")
