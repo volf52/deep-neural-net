@@ -344,7 +344,11 @@ class Network(object):
             if self.useBatchNorm:
                 self.loadBatchNormParameters(*best_bn_params)
 
-        return costList, trainAccList, valAccList
+        history = {"loss": costList, "accuracy": trainAccList}
+        if valX is not None:
+            history["val_accuracy"] = valAccList
+
+        return history
 
     def __updateBatch(self, batch: XY_DATA, lr: float):
         X, y = batch
