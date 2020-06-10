@@ -6,29 +6,37 @@ class Callback:
 
 
 class ErrorCallback(Callback):
-    def __init__(self, n_bits: int, pFlip: float, pNeurons: float, mode=0):
+    def __init__(self, n_bits: int, p: float, mode=0, bnn=False):
+        assert mode in tuple(range(3))
         super(ErrorCallback, self).__init__()
         self.nbits = n_bits
-        self.pFlip = pFlip
-        self.pNeurons = pNeurons
+        self.p = p
         self.mode = mode
+        self.forBnn = bnn
 
-        if mode == 0:
-            self._flipFunc = self._zeroToOne
-        elif mode == 1:
-            self._flipFunc = self._oneToZero
-        elif mode == 3:
-            self._flipFunc = self._hybridMode
+    def _flipFunc(self, inp):
+        assert inp.size == 32
+
+        idx = np.arange(0, 32, dtype=np.int8)
+
+        # If the MSB of the exponent field is high, ignore the rest of bits in the exponent field
+        # The reason this bit comes at 25 instead of 1, is the little endian representation
+        if inp[25]:
+            idx[26:32] = -1
+            idx[16] = -1
+        # Otherwise, ignore the MSB itself
         else:
-            raise ValueError("Mode must have a value in range [0,2]")
+            idx[25] = -1
 
-    def _zeroToOne(self, inp):
-        return inp
+        if self.mode == 0:
+            idx[inp[idx]] = -1
+        elif self.mode == 1:
+            idx[~inp[idx]] = -1
 
-    def _oneToZero(self, inp):
-        return inp
+        idx = idx[idx != -1]
+        idx = np.random.choice(idx, min(idx.size, self.nbits), replace=False)
+        inp[idx] = ~inp[idx]
 
-    def _hybridMode(self, inp):
         return inp
 
     @staticmethod
@@ -45,9 +53,13 @@ class ErrorCallback(Callback):
 
 
     def _flip(self, inp: np.ndarray):
+        # If BNN, just flip the sign
+        if self.forBnn:
+            return -1 * inp
+
         unpacked = self.unpack(inp)
 
-        flipped = self._flipFunc(unpacked)
+        flipped = np.apply_along_axis(self._flipFunc, 1, unpacked)
 
         packed = self.repack(flipped)
 
@@ -56,17 +68,17 @@ class ErrorCallback(Callback):
     def __call__(self, inp: np.ndarray):
         assert inp.ndim == 2
 
-        rowIdx = np.random.choice(inp.shape[0], round(inp.shape[0] * self.pFlip), replace=False)
-        colIdx = np.random.choice(inp.shape[1], round(inp.shape[1] * self.pNeurons), replace=False)
+        shape = inp.shape
+        inpFlat = inp.flatten()
+        idxArr = np.random.choice(inp.size, round(inp.size * self.p), replace=False)
 
-
-        if rowIdx.size == 0 or colIdx.size == 0:
+        if idxArr.size == 0:
             return inp
 
-        flipSeq = (rowIdx, colIdx)
-        print(f"Flipping {flipSeq}")
+        # print(f"Flipping idx: {idxArr}")
+        inpFlat[idxArr] = self._flip(inpFlat[idxArr])
 
-        inp[flipSeq] = self._flip(inp[flipSeq])
+        inp = inpFlat.reshape(shape)
 
         return inp
 
@@ -74,7 +86,7 @@ class ErrorCallback(Callback):
 if __name__ == "__main__":
     w = np.random.randn(3, 5).astype(np.float32)
 
-    err = ErrorCallback(2, 0.2, 0.3)
+    err = ErrorCallback(2, 0.2, mode=0)
 
     print(w)
     flippedW = err(w)
