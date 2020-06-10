@@ -40,6 +40,22 @@ class ErrorCallback(Callback):
 
         return inp
 
+    def _flipBNN(self, inp):
+        if self.mode == 2:
+            inp = -1 * inp
+
+        else:
+            if self.mode == 0:
+                # -1/negative represent 0 in BNN case
+                selector = inp < 0
+            else:
+                # +1/positive represent 1 in BNN (this is tentative)
+                selector = inp > 0
+
+            inp[selector] = -inp[selector]
+
+        return inp
+
     @staticmethod
     def unpack(inp):
         buff = np.frombuffer(inp, dtype=np.uint8)
@@ -54,10 +70,6 @@ class ErrorCallback(Callback):
 
 
     def _flip(self, inp: np.ndarray):
-        # If BNN, just flip the sign
-        if self.forBnn:
-            return -1 * inp
-
         unpacked = self.unpack(inp)
 
         flipped = np.apply_along_axis(self._flipFunc, 1, unpacked)
@@ -80,7 +92,8 @@ class ErrorCallback(Callback):
             return inp
 
         print(f"Flipping bits for {len(idxArr)} / {inpFlat.size} values")
-        inpFlat[idxArr] = self._flip(inpFlat[idxArr])
+        flipFunc = [self._flip, self._flipBNN][self.forBnn]
+        inpFlat[idxArr] = flipFunc(inpFlat[idxArr])
 
         inp = inpFlat.reshape(shape)
 
