@@ -1,4 +1,5 @@
 import numpy as np
+import cupy as cp
 
 
 class Callback:
@@ -65,20 +66,26 @@ class ErrorCallback(Callback):
 
         return packed
 
-    def __call__(self, inp: np.ndarray):
+    def __call__(self, inp: np.ndarray, gpu=False):
         assert inp.ndim == 2
 
+        if gpu:
+            inp = cp.asnumpy(inp)
+
         shape = inp.shape
-        inpFlat = inp.flatten()
-        idxArr = np.random.choice(inp.size, round(inp.size * self.p), replace=False)
+        inpFlat = np.array(inp.flatten())
+        idxArr = np.random.choice(inpFlat.size, round(inpFlat.size * self.p), replace=False)
 
         if idxArr.size == 0:
             return inp
 
-        # print(f"Flipping idx: {idxArr}")
+        print(f"Flipping bits for {len(idxArr)} / {inpFlat.size} values")
         inpFlat[idxArr] = self._flip(inpFlat[idxArr])
 
         inp = inpFlat.reshape(shape)
+
+        if gpu:
+            inp = cp.array(inp)
 
         return inp
 

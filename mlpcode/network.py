@@ -13,6 +13,7 @@ from mlpcode.loss import LOSS_DERIVATES, LOSS_FUNCS
 from mlpcode.loss import LossFuncs as lf
 from mlpcode.optim import LRScheduler
 from mlpcode.utils import MODELDIR, XY_DATA
+from mlpcode.callbacks import Callback
 
 ArrayList = List[np.ndarray]
 ModelLayer = Union[LinearLayer, BinaryLayer, BatchNormLayer]
@@ -134,6 +135,20 @@ class Network(object):
             gammas, betas, mus, sigmas, self._layers
         ):
             layer.loadBatchNormParams(gamma, beta, mu, sigma)
+
+    def addCallbacks(self, callbacks: Union[Callback, List[Callback]], num_layers: int=None):
+        if num_layers is None:
+            num_layers = len(self._layers)
+
+        assert num_layers > 0
+        if isinstance(callbacks, List):
+            assert len(callbacks) == num_layers
+            assert all(isinstance(cb, Callback) for cb in callbacks)
+        else:
+            callbacks = [callbacks] * num_layers
+
+        for layer, cb in zip(self._layers[:num_layers], callbacks):
+            layer.addCallback(cb)
 
     @staticmethod
     def fromModel(filePth: Path, useGpu=False, binarized=False):

@@ -3,6 +3,7 @@ import numpy as np
 
 from mlpcode.activation import ACTIVATION_FUNCTIONS, ACTIVATION_DERIVATIVES
 from mlpcode.activation import ActivationFuncs as af
+from mlpcode.callbacks import Callback
 
 
 class Layer:
@@ -143,6 +144,8 @@ class LinearLayer(Layer):
         self.bias = None
         self.activation = None
         self.batchNorm = batchNorm
+        # Change callbacks to nested dict for test and train, with separate callbacks for weights, z, activations
+        self.callbacks = []
 
         if batchNorm:
             self.batchNormLayer = BatchNormLayer(layerUnits, gpu=gpu)
@@ -176,6 +179,9 @@ class LinearLayer(Layer):
 
         self.batchNormLayer.loadBatchNormParams(gamma, beta, mu, sigma)
 
+    def addCallback(self, callback: Callback):
+        self.callbacks.append(callback)
+
     def build(self, activation: af = None):
 
         if self.weights is None:
@@ -202,6 +208,11 @@ class LinearLayer(Layer):
     ) -> np.ndarray:
         self.cache.clear()
         self.cache["input"] = X
+
+        # Change weights with callbacks only at test time
+        if not isTrain:
+            for cb in self.callbacks:
+                weight = cb(weight, gpu=self.gpu)
 
         z = X.dot(weight)
         if bias is not None:
