@@ -1,14 +1,9 @@
 click==7.1.2
 cupy-cuda102==7.5.0
-cycler==0.10.0
 fastrlock==0.5
 h5py==2.10.0
-kiwisolver==1.2.0
 llvmlite==0.31.0
-matplotlib==3.2.1
 numba==0.48.0
 numpy==1.18.5
-pyparsing==2.4.7
-python-dateutil==2.8.1
 six==1.15.0
 typer==0.1.1
