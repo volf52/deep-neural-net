@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "mlpcode"
-version = "0.1.0"
+version = "1.0.0"
 description = "MLP cli for semester project"
 authors = ["Arslan <rslnkrmt2552@gmail.com>"]
 license = "MIT"
