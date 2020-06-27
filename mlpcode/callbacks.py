@@ -7,13 +7,17 @@ class Callback:
 
 
 class ErrorCallback(Callback):
-    def __init__(self, n_bits: int, p: float, mode=0, bnn=False):
+    def __init__(self, p: float, mode=0, bnn=False):
         assert mode in tuple(range(3))
+        # mode 0: 0 -> 1
+        # mode 1: 1 -> 0
+        # mode 2: hybrid
+
         super(ErrorCallback, self).__init__()
-        self.nbits = n_bits
         self.p = p
         self.mode = mode
         self.forBnn = bnn
+        # self.nBits = 1
 
     def _flipFunc(self, inp):
         assert inp.size == 32
@@ -35,7 +39,8 @@ class ErrorCallback(Callback):
             idx[~inp[idx]] = -1
 
         idx = idx[idx != -1]
-        idx = np.random.choice(idx, min(idx.size, self.nbits), replace=False)
+        nBits = round(idx.size * self.p)
+        idx = np.random.choice(idx, min(idx.size, nBits), replace=False)
         inp[idx] = ~inp[idx]
 
         return inp
@@ -91,7 +96,7 @@ class ErrorCallback(Callback):
         if idxArr.size == 0:
             return inp
 
-        print(f"Flipping bits for {len(idxArr)} / {inpFlat.size} values")
+        # print(f"Flipping bits for {len(idxArr)} / {inpFlat.size} values")
         flipFunc = [self._flip, self._flipBNN][self.forBnn]
         inpFlat[idxArr] = flipFunc(inpFlat[idxArr])
 
@@ -106,7 +111,7 @@ class ErrorCallback(Callback):
 if __name__ == "__main__":
     w = np.random.randn(3, 5).astype(np.float32)
 
-    err = ErrorCallback(2, 0.2, mode=0)
+    err = ErrorCallback(0.2, mode=0)
 
     print(w)
     flippedW = err(w)

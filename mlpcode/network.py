@@ -153,7 +153,7 @@ class Network(object):
     @staticmethod
     def fromModel(filePth: Path, useGpu=False, binarized=False):
         assert filePth.exists()
-        print(f"\nLoading model from {filePth}\n")
+        # print(f"\nLoading model from {filePth}\n")
 
         with h5py.File(filePth, "r") as fp:
             fpKeys = fp.keys()
