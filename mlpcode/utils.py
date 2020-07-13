@@ -10,27 +10,15 @@ import numpy as np
 # CONFIGURATION
 
 prnt = Path(__file__).parent
-CONFIG_FILE = prnt / "nn.config.json"
-
-if CONFIG_FILE.exists():
-    # print(f"Reading config from {CONFIG_FILE}")
-    with CONFIG_FILE.open("r") as f:
-        tmp = json.load(f)
-        config = {k: Path(tmp[k]) for k in tmp.keys()}
-else:
-    config = {"DATADIR": prnt / "data", "MODELDIR": prnt / "models"}
-    if not config["MODELDIR"].exists():
-        config["MODELDIR"].mkdir()
-    with CONFIG_FILE.open("w") as f:
-        json.dump({k: str(config[k]) for k in config.keys()}, f)
-    print(f"Wrote config to {CONFIG_FILE}")
 
 # Data dir is just a folder named 'data' in the same directory where this file exists.
 # It should contain the required datasets on which the models are to be trained/tested
-DATADIR: Path = config["DATADIR"]
+DATADIR: Path = prnt / "data"
 assert DATADIR.exists()
 
-MODELDIR: Path = config["MODELDIR"]
+MODELDIR: Path = prnt / "models"
+if not MODELDIR.exists():
+    MODELDIR.mkdir()
 
 MNISTDIR: Path = DATADIR / "mnist"
 FASHIONMNISTDIR: Path = DATADIR / "fashion-mnist"
@@ -45,7 +33,6 @@ XY_DATA = Tuple[np.ndarray, np.ndarray]
 class DATASETS(Enum):
     mnist = "mnist"
     fashion = "fashion-mnist"
-    cifar10 = "cifar-10"
     mnistc_brightness = "mnist_c-brightness"
     mnistc_canny_edges = "mnist_c-canny_edges"
     mnistc_dotted_line = "mnist_c-dotted_line"
@@ -78,8 +65,6 @@ class DATASETS(Enum):
     mnistc_snow = "mnist_c-snow"
     mnistc_speckle_noise = "mnist_c-speckle_noise"
     mnistc_zoom_blur = "mnist_c-zoom_blur"
-
-    # affnist = 'affNIST'
 
     def __repr__(self):
         return self.value
@@ -602,97 +587,9 @@ def loadFashionMnist(useGpu=False, encoded=True) -> TRAIN_TEST_DATA:
 
     return trainX, trainY, testX, testY
 
-
-def loadAffNist(useGpu=False, encoded=True) -> TRAIN_TEST_DATA:
-    root = DATADIR / "affnist"
-    assert root.exists()
-
-    prefix = "affNIST"
-    train_instances = 1600000
-    test_validation_instances = 320000
-    features = 1600
-
-    trainX = loadX(
-        root / f"{prefix}_trainX.npy",
-        loadNpyFile,
-        train_instances,
-        features,
-        useGpu=useGpu,
-    )
-    trainY = loadY(
-        root / f"{prefix}_trainY.npy", loadNpyFile, useGpu=useGpu, encoded=encoded
-    )
-    testX = loadX(
-        root / f"{prefix}_testX.npy",
-        loadNpyFile,
-        test_validation_instances,
-        features,
-        useGpu=useGpu,
-    )
-    testY = loadY(
-        root / f"{prefix}_testY.npy", loadNpyFile, useGpu=useGpu, encoded=False
-    ).astype(np.uint8)
-
-    return trainX, trainY, testX, testY
-
-
-def loadCifar10(useGpu=False, encoded=True) -> TRAIN_TEST_DATA:
-    """
-    Loads CIFAR-10 (greyscale) data
-
-    Parameters
-    ----------
-    useGpu
-        Whether to use GPU or CPU as data device
-    encoded
-        Whether to one-hot encode the training labels (trainY)
-
-    Returns
-    -------
-    TRAIN_TEST_DATA
-        A 4-element tuple of numpy arrays (trainX, trainY, testX, testY) |
-        trainX: Shape = (train_instances, features), dtype = np.float32 |
-        trainY: Shape = (train_instances, num_classes or 1), dtype = np.uint8 |
-        testX: Shape = (test_instances, features), dtype = np.float32 |
-        testY: Shape = (test_instances, 1), dtype = np.uint8
-    """
-
-    root = DATADIR / "cifar-10"
-    assert root.exists()
-
-    prefix = "cifar-10_greyscale"
-    train_instances = 50000
-    test_validation_instances = 10000
-    features = 1024
-
-    trainX = loadX(
-        root / f"{prefix}_trainX.npy",
-        loadNpyFile,
-        train_instances,
-        features,
-        useGpu=useGpu,
-    )
-    trainY = loadY(
-        root / f"{prefix}_trainY.npy", loadNpyFile, useGpu=useGpu, encoded=encoded
-    )
-    testX = loadX(
-        root / f"{prefix}_testX.npy",
-        loadNpyFile,
-        test_validation_instances,
-        features,
-        useGpu=useGpu,
-    )
-    testY = loadY(
-        root / f"{prefix}_testY.npy", loadNpyFile, useGpu=useGpu, encoded=False
-    ).astype(np.uint8)
-
-    return trainX, trainY, testX, testY
-
-
 LOADING_FUNCS = {
     DATASETS.mnist: loadMnist,
     DATASETS.fashion: loadFashionMnist,
-    DATASETS.cifar10: loadCifar10,
 }
 
 
