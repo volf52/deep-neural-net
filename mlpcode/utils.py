@@ -190,8 +190,18 @@ def split_train_valid(
     return X[:-valSize], X[-valSize:], y[:-valSize], y[-valSize:]
 
 
-# DATA I/O UTILS AND HELPER FUNCTIONS
+def normalize(X: np.ndarray, newMin=0., newMax=1.):
+    """Normalize/Standardize (min-max scaling) the np/cp array.Rescales to [newMin, newMax]"""
 
+    xmin = X.min()
+    diff = 1. * (X.max() - xmin) * (newMax - newMin)
+    newX = (X - xmin).astype(np.float32)
+    newX /= diff
+    newX += newMin
+
+    return newX
+
+# DATA I/O UTILS AND HELPER FUNCTIONS
 
 def loadIdxFile(file_pth: Path, isTest: bool, useGpu=False) -> np.ndarray:
     """
@@ -260,9 +270,9 @@ def loadNpyFile(file_pth: Path, isLabelFile: bool, useGpu=False) -> np.ndarray:
     else:
         xp = np
 
-    dt = np.int8 if isLabelFile else np.float32
-
-    data = xp.load(file_pth).astype(dt)
+    data = xp.load(file_pth)
+    if isLabelFile:
+        data = data.astype(np.float32)
     if useGpu:
         cp.cuda.Stream.null.synchronize()
 
@@ -297,11 +307,8 @@ def loadX(
     X = (
         loadFunc(file_pth, False, useGpu)
         .reshape(num_instances, num_features)
-        .astype(np.float32)
     )
 
-    # using inplace operator to not waste memory on copying and operating on a copy
-    X /= 255.0
     if useGpu:
         cp.cuda.Stream.null.synchronize()
 
@@ -740,8 +747,8 @@ def loadDataset(
 
 
 if __name__ == "__main__":
-    trainX, trainY, testX, testY = loadDataset(DATASETS.mnistc_jpeg_compression)
-    print(testY.shape)
+    trainX, trainY, testX, testY = loadDataset(DATASETS.mnistc_fog)
+    print(trainX.dtype)
     # mnistCArr = [x for x in DATASETS if str(x).startswith("mnist_c")]
     # totalDatasets = len(mnistCArr)
     # for ds in mnistCArr:

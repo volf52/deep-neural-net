@@ -4,7 +4,7 @@ from mlpcode.activation import ActivationFuncs as af
 from mlpcode.loss import LossFuncs as lf
 from mlpcode.network import Network
 from mlpcode.optim import LRScheduler, LRSchedulerStrat as LRS
-from mlpcode.utils import DATASETS, loadDataset, MODELDIR, split_train_valid
+from mlpcode.utils import DATASETS, loadDataset, MODELDIR, split_train_valid, normalize
 
 useGpu = True
 binarized = False
@@ -12,11 +12,13 @@ dataset = DATASETS.mnistc_spatter
 print("Loading {}".format(dataset))
 trainX, trainY, testX, testY = loadDataset(dataset, useGpu=useGpu)
 
+trainX = normalize(trainX)
+testX = normalize(testX)
+
 trainX = trainX * 2 - 1
 testX = testX * 2 - 1
 
 trainX, valX, trainY, valY = split_train_valid(trainX, trainY)
-
 
 print("Finished loading {} data".format(dataset))
 

@@ -1,21 +1,32 @@
 import numpy as np
 import cupy as cp
 
-
 class Callback:
-    pass
-
-
-class ErrorCallback(Callback):
-    def __init__(self, p: float, mode=0, bnn=False):
-        assert mode in tuple(range(3))
+    def __init__(self, p:float, mode: int):
+        assert mode in (0, 1, 2)
         # mode 0: 0 -> 1
         # mode 1: 1 -> 0
         # mode 2: hybrid
-
-        super(ErrorCallback, self).__init__()
+        
         self.p = p
         self.mode = mode
+
+    @staticmethod
+    def unpack(inp):
+        buff = np.frombuffer(inp, dtype=np.uint8)
+        unpacked = np.unpackbits(buff).astype(np.bool).reshape(-1, 32)
+        return unpacked
+
+    @staticmethod
+    def repack(inp):
+        buff = np.packbits(inp)
+        packed = np.frombuffer(buff, dtype=np.float32)
+        return packed
+
+
+class ErrorCallback(Callback):
+    def __init__(self, p: float, mode=2, bnn=False):
+        super(ErrorCallback, self).__init__(p, mode)
         self.forBnn = bnn
         # self.nBits = 1
 
@@ -63,19 +74,6 @@ class ErrorCallback(Callback):
         # print(f"{flipSize} values flipped")
         return inp
 
-    @staticmethod
-    def unpack(inp):
-        buff = np.frombuffer(inp, dtype=np.uint8)
-        unpacked = np.unpackbits(buff).astype(np.bool).reshape(-1, 32)
-        return unpacked
-
-    @staticmethod
-    def repack(inp):
-        buff = np.packbits(inp)
-        packed = np.frombuffer(buff, dtype=np.float32)
-        return packed
-
-
     def _flip(self, inp: np.ndarray):
         unpacked = self.unpack(inp)
 
@@ -89,6 +87,10 @@ class ErrorCallback(Callback):
         assert inp.ndim == 2
 
         if gpu:
+            inp = cp.asnumpy(inp)
+        elif cp.get_array_module(inp) == cp:
+            print("You forgot to set `gpu=True` for a Cupy array")
+            gpu = True
             inp = cp.asnumpy(inp)
 
         shape = inp.shape
@@ -109,12 +111,56 @@ class ErrorCallback(Callback):
 
         return inp
 
+class ImageErrorCallback(Callback):
+    def __init__(self, p: float, mode=2):
+        super(ImageErrorCallback, self).__init__(p, mode)
+        self.nbits = self.p * 8
+
+    def intError(self, arr: np.ndarray):
+        assert arr.dtype == np.uint8
+
+        unpacked = np.unpackbits(arr)
+
+        nbits = round(self.p * unpacked.size)
+        if self.mode == 0:
+            chosen, = np.where(unpacked == 0)
+            idx = np.random.choice(chosen, min(chosen.size, nbits), replace=False)
+        elif self.mode == 1:
+            chosen, = np.where(unpacked == 1)
+            idx = np.random.choice(chosen, min(chosen.size, nbits), replace=False)
+        else:
+            idx = np.random.choice(unpacked.size, nbits, replace=False)
+
+        unpacked[idx] = ~unpacked[idx]
+
+        return np.packbits(unpacked)
+
+    def __call__(self, arr: np.ndarray, gpu=False):
+        if gpu:
+            arr = cp.asnumpy(arr)
+        elif cp.get_array_module(arr) == cp:
+            print("You forgot to set `gpu=True` for a Cupy array")
+            gpu = True
+            arr = cp.asnumpy(arr)
+
+        if arr.dtype == np.uint8:
+            arr = np.apply_along_axis(self.intError, 1, arr)
+        # elif arr.dtype == np.float32:
+        #     result = self.floatError(arr)
+        else:
+            raise ValueError("Only uint8 allowed")
+
+        if gpu:
+            arr = cp.array(arr)
+
+        return arr
 
 if __name__ == "__main__":
-    w = np.random.randn(3, 5).astype(np.float32)
+    from mlpcode.utils import loadDataset, DATASETS
+    _, _, testX, _ = loadDataset(DATASETS.mnist)
 
-    err = ErrorCallback(0.2, mode=0)
+    icb = ImageErrorCallback(0.1)
 
-    print(w)
-    flippedW = err(w)
-    print(flippedW)
+    print(testX[:10,:])
+    testX = icb(testX)
+    print(testX[:10, :])

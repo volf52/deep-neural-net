@@ -1,5 +1,5 @@
 from mlpcode.network import Network
-from mlpcode.utils import DATASETS, MODELDIR, loadDataset
+from mlpcode.utils import DATASETS, MODELDIR, loadDataset, normalize
 from mlpcode.activation import ActivationFuncs as af
 from mlpcode.callbacks import ErrorCallback
 
@@ -11,6 +11,7 @@ modelPth = MODELDIR / "bnn_mnist_1024_1024_yesBN_noBias_98_433_968_98_27.hdf5"
 assert modelPth.exists()
 
 _, _, testX, testY = loadDataset(ds, useGpu=useGpu)
+testX = normalize(testX)
 # pList = [0.01, 0.02, 0.05, 0.1, 0.2]
 pList = [0.2]
 
