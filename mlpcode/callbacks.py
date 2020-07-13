@@ -46,6 +46,7 @@ class ErrorCallback(Callback):
         return inp
 
     def _flipBNN(self, inp):
+        flipSize = inp.size
         if self.mode == 2:
             inp = -1 * inp
 
@@ -56,9 +57,10 @@ class ErrorCallback(Callback):
             else:
                 # +1/positive represent 1 in BNN (this is tentative)
                 selector = inp > 0
-
+            flipSize = selector.sum()
             inp[selector] = -inp[selector]
 
+        # print(f"{flipSize} values flipped")
         return inp
 
     @staticmethod
@@ -96,7 +98,7 @@ class ErrorCallback(Callback):
         if idxArr.size == 0:
             return inp
 
-        # print(f"Flipping bits for {len(idxArr)} / {inpFlat.size} values")
+        print(f"Flipping bits for {len(idxArr)} / {inpFlat.size} values")
         flipFunc = [self._flip, self._flipBNN][self.forBnn]
         inpFlat[idxArr] = flipFunc(inpFlat[idxArr])
 
