@@ -131,7 +131,7 @@ class ImageErrorCallback(Callback):
         else:
             idx = np.random.choice(unpacked.size, nbits, replace=False)
 
-        unpacked[idx] = ~unpacked[idx]
+        unpacked[idx] = np.logical_not(unpacked[idx])
 
         return np.packbits(unpacked)
 
