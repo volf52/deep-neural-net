@@ -179,8 +179,8 @@ def normalize(X: np.ndarray, newMin=0., newMax=1.):
     """Normalize/Standardize (min-max scaling) the np/cp array.Rescales to [newMin, newMax]"""
 
     xmin = X.min()
-    diff = 1. * (X.max() - xmin) * (newMax - newMin)
-    newX = (X - xmin).astype(np.float32)
+    diff = 1. * (X.max() - xmin)
+    newX = (X - xmin).astype(np.float32) * (newMax - newMin)
     newX /= diff
     newX += newMin
 
