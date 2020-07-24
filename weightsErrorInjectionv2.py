@@ -7,7 +7,7 @@ useGpu = False
 binarized = True
 ds = DATASETS.mnist
 
-modelPth = MODELDIR / "bnnPytorchTest.hdf5"
+modelPth = MODELDIR / "bnnPytorchCheckpTest.hdf5"
 assert modelPth.exists()
 
 _, _, testX, testY = loadDataset(ds, useGpu=useGpu)
@@ -19,16 +19,16 @@ p = 0.1
 nn = Network.fromModel(modelPth, useGpu=useGpu, binarized=binarized)
 nn.compile(hiddenAf=af.sign, outAf=af.softmax)
 acc = nn.get_accuracy(testX, testY)
-print(f"P: {p:0.02f}\tAcc: {acc:0.02f}\n\n")
+print(f"P: None\tAcc: {acc:0.02f}")
 
 cb = ErrorCallback(p, mode=2, bnn=binarized)
 nn.addCallbacks(cb)
 acc = nn.get_accuracy(testX, testY)
-print(f"P: {p:0.02f}\tAcc: {acc:0.02f}\n\n")
+print(f"P: 0.1\tAcc: {acc:0.02f}")
 
 nn.clearCallbacks()
 
 cb = ErrorCallback(0.2, mode=2, bnn=binarized)
 nn.addCallbacks(cb)
 acc = nn.get_accuracy(testX, testY)
-print(f"P: {p:0.02f}\tAcc: {acc:0.02f}\n\n")
+print(f"P: 0.2\tAcc: {acc:0.02f}\n\n")
