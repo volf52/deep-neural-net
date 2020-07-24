@@ -24,7 +24,7 @@ class Layer:
 
 
 class BatchNormLayer(Layer):
-    EPSILON = 1e-2
+    EPSILON = 1e-4
     MA_BETA = 0.9  # Moving average beta parameter
 
     def __init__(self, layerUnits: int, gpu=False):
@@ -182,6 +182,9 @@ class LinearLayer(Layer):
     def addCallback(self, callback: Callback):
         self.callbacks.append(callback)
 
+    def clearCallbacks(self):
+        self.callbacks.clear()
+
     def build(self, activation: af = None):
 
         if self.weights is None:
@@ -280,7 +283,7 @@ class BinaryLayer(LinearLayer):
         super(BinaryLayer, self).__init__(
             layerUnits, inputUnits, useBias=useBias, gpu=gpu, batchNorm=batchNorm,
         )
-        self.H = None
+        self.H = 1.
 
     def build(self, activation: af = None):
         if self.H is None:
@@ -292,9 +295,9 @@ class BinaryLayer(LinearLayer):
     @staticmethod
     def binarize(x: np.ndarray, H=1.0) -> np.ndarray:
         newX = x.copy()
-        newX[x >= 0] = 1
-        newX[x < 0] = -1
-        newX *= H
+        newX[x >= 0] = 1.
+        newX[x < 0] = -1.
+        # newX *= H
 
         return newX
 
