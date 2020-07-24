@@ -74,6 +74,12 @@ class ErrorCallback(Callback):
         # print(f"{flipSize} values flipped")
         return inp
 
+    def _flipBNNMask(self, inp: np.ndarray):
+        out = inp.copy()
+        mask = np.random.uniform(size=inp.shape) < self.p
+        out[mask] = -out[mask]
+        return out
+
     def _flip(self, inp: np.ndarray):
         unpacked = self.unpack(inp)
 
@@ -85,6 +91,9 @@ class ErrorCallback(Callback):
 
     def __call__(self, inp: np.ndarray, gpu=False):
         assert inp.ndim == 2
+
+        if self.forBnn:
+            return self._flipBNNMask(inp)
 
         if gpu:
             inp = cp.asnumpy(inp)
