@@ -150,6 +150,10 @@ class Network(object):
         for layer, cb in zip(self._layers[:num_layers], callbacks):
             layer.addCallback(cb)
 
+    def clearCallbacks(self):
+        for l in self._layers:
+            l.clearCallbacks()
+
     @staticmethod
     def fromModel(filePth: Path, useGpu=False, binarized=False):
         assert filePth.exists()
