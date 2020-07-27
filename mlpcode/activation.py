@@ -5,9 +5,6 @@ from numpy import ndarray
 
 RELU_EPSILON = 0.01
 
-# TODO: Might have to change all a's to z's and use z from cache during backpropogation, for the hard_tanh part
-
-
 def identity(x: ndarray):
     return x
 
@@ -116,12 +113,22 @@ def unitstep(x: ndarray):
     return a
 
 
-def hard_tanh(dA: ndarray, a: ndarray):
+def hard_tanh(x: ndarray):
     # equivalent to max(-1, min(z, 1))
-    a = a.clip(-1, 1)
+    a = x.clip(-1, 1)
     # No need for the hard_sigmoid thing. Same as clip
-    dZ = a * dA
-    return dZ
+    return a
+
+def hard_tanh_derivative(dA: ndarray, a:ndarray):
+    xp = cp.get_array_module(a)
+
+    out = xp.ones_like(a)
+    out[a < -1] = 0
+    out[a > 1] = 0
+
+    out *= dA
+
+    return out
 
 
 class ActivationFuncs(Enum):
@@ -155,7 +162,7 @@ ACTIVATION_DERIVATIVES = {
     ActivationFuncs.sigmoid: sigmoid_derivate,
     ActivationFuncs.softmax: softmax_derivative,
     ActivationFuncs.tanh: tanh_derivative,
-    ActivationFuncs.sign: hard_tanh,
+    ActivationFuncs.sign: hard_tanh_derivative,
     ActivationFuncs.leaky_relu: leaky_relu_derivative,
     ActivationFuncs.identity: identity_derivative,
 }
