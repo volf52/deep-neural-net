@@ -272,42 +272,41 @@ class LinearLayer(Layer):
 
 
 class BinaryLayer(LinearLayer):
-    def __init__(
-        self,
-        layerUnits: int,
-        inputUnits: int,
-        useBias=False,
-        gpu=False,
-        batchNorm=False,
-    ):
-        super(BinaryLayer, self).__init__(
-            layerUnits, inputUnits, useBias=useBias, gpu=gpu, batchNorm=batchNorm,
-        )
-        self.H = 1.
-
-    def build(self, activation: af = None):
-        if self.H is None:
-            self.H = self.xp.sqrt(1.5 / (self.layerUnits + self.inputUnits)).astype(
-                np.float32
-            )
-        super(BinaryLayer, self).build(activation)
+    # def __init__(
+    #     self,
+    #     layerUnits: int,
+    #     inputUnits: int,
+    #     useBias=False,
+    #     gpu=False,
+    #     batchNorm=False,
+    # ):
+    #     super(BinaryLayer, self).__init__(
+    #         layerUnits, inputUnits, useBias=useBias, gpu=gpu, batchNorm=batchNorm,
+    #     )
+    #     self.H = 1.
+    #
+    # def build(self, activation: af = None):
+    #     if self.H is None:
+    #         self.H = self.xp.sqrt(1.5 / (self.layerUnits + self.inputUnits)).astype(
+    #             np.float32
+    #         )
+    #     super(BinaryLayer, self).build(activation)
 
     @staticmethod
-    def binarize(x: np.ndarray, H=1.0) -> np.ndarray:
+    def binarize(x: np.ndarray) -> np.ndarray:
         newX = x.copy()
         newX[x >= 0] = 1.
         newX[x < 0] = -1.
-        # newX *= H
 
         return newX
 
     def forward(self, X: np.ndarray, isTrain=True) -> np.ndarray:
         assert self.isBuilt
 
-        weight = self.binarize(self.weights, H=self.H)
+        weight = self.binarize(self.weights)
         bias = None
         if self.bias is not None:
-            bias = self.binarize(self.bias, H=self.H)
+            bias = self.binarize(self.bias)
 
         z = self._forward(X, weight, bias, isTrain=isTrain)
         return z
@@ -315,6 +314,6 @@ class BinaryLayer(LinearLayer):
 
 if __name__ == "__main__":
     z = np.random.randn(10, 10)
-    layer = BatchNormLayer(10)
+    layer = BinaryLayer(5, 10)
     layer.build()
     print(layer.forward(z))
