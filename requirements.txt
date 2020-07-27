@@ -2,9 +2,8 @@ click==7.1.2
 cupy-cuda102==7.6.0
 fastrlock==0.5
 h5py==2.10.0
-llvmlite==0.31.0
--e git+git@github.com:volf52/deep-neural-net.git@7b1f2b45ef0589d4cf922e81774d7b60b79f822a#egg=mlpcode
-numba==0.48.0
-numpy==1.19.0
+llvmlite==0.33.0
+numba==0.50.1
+numpy==1.19.1
 six==1.15.0
 typer==0.1.1
