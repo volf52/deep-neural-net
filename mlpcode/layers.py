@@ -272,26 +272,6 @@ class LinearLayer(Layer):
 
 
 class BinaryLayer(LinearLayer):
-    # def __init__(
-    #     self,
-    #     layerUnits: int,
-    #     inputUnits: int,
-    #     useBias=False,
-    #     gpu=False,
-    #     batchNorm=False,
-    # ):
-    #     super(BinaryLayer, self).__init__(
-    #         layerUnits, inputUnits, useBias=useBias, gpu=gpu, batchNorm=batchNorm,
-    #     )
-    #     self.H = 1.
-    #
-    # def build(self, activation: af = None):
-    #     if self.H is None:
-    #         self.H = self.xp.sqrt(1.5 / (self.layerUnits + self.inputUnits)).astype(
-    #             np.float32
-    #         )
-    #     super(BinaryLayer, self).build(activation)
-
     @staticmethod
     def binarize(x: np.ndarray) -> np.ndarray:
         newX = x.copy()
