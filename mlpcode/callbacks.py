@@ -7,7 +7,9 @@ class Callback:
         # mode 0: 0 -> 1
         # mode 1: 1 -> 0
         # mode 2: hybrid
-        
+
+        if p is None:
+            p = 0
         self.p = p
         self.mode = mode
 
@@ -145,12 +147,17 @@ class ImageErrorCallback(Callback):
         return np.packbits(unpacked)
 
     def __call__(self, arr: np.ndarray, gpu=False):
+        if self.p is None or self.p == 0:
+            return arr
+
         if gpu:
             arr = cp.asnumpy(arr)
         elif cp.get_array_module(arr) == cp:
             print("You forgot to set `gpu=True` for a Cupy array")
             gpu = True
             arr = cp.asnumpy(arr)
+        else:
+            arr = arr.copy()
 
         if arr.dtype == np.uint8:
             arr = np.apply_along_axis(self.intError, 1, arr)
