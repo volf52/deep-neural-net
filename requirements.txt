@@ -1,5 +1,5 @@
 click==7.1.2
-cupy-cuda102==7.6.0
+cupy-cuda102==7.7.0
 fastrlock==0.5
 h5py==2.10.0
 llvmlite==0.33.0
