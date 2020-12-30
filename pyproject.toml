@@ -6,8 +6,7 @@ authors = ["Arslan <rslnkrmt2552@gmail.com>"]
 license = "MIT"
 
 [tool.poetry.dependencies]
-python = "^3.6"
-typer = "^0.1.1"
+python = "^3.7"
 numpy = "^1.18.2"
 cupy-cuda102 = "^7.3.0"
 h5py = "^2.10.0"
